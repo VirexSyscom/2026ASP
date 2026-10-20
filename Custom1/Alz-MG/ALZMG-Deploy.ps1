@@ -2,9 +2,6 @@
 # Azure Landing Zone Management Group 建立腳本
 # ==========================================
 
-# 登入 Azure
-Connect-AzAccount
-
 # ===== 參數設定 =====
 $ALZMG = "ALZ"
 $APMG = "APGroup"
