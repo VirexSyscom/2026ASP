@@ -9,7 +9,14 @@ trigger:
 pool:
   name: ReDeployAgentPool
 
+
 steps:
+
+- task: PowerShell@2
+  inputs:
+#    filePath: 'https://raw.githubusercontent.com/VirexSyscom/2026ASP/refs/heads/main/Custom1/Alz-MG/ALZMG-Deploy.ps'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Alz-MG'
+
 - task: TerraformTask@5
   displayName: Sub_Workload 執行 terraform init
   inputs:
