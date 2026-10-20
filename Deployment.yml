@@ -15,7 +15,7 @@ steps:
 - task: PowerShell@2
   displayName: 設定管理群組
   inputs:
-    filePath: 'https://raw.githubusercontent.com/VirexSyscom/2026ASP/refs/heads/main/Custom1/Alz-MG/ALZMG-Deploy.ps1'
+    filePath: '$(Build.SourcesDirectory)/Custom1/Alz-MG/ALZMG-Deploy.ps1'
 #    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Alz-MG'
 
 - task: TerraformTask@5
