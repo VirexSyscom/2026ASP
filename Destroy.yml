@@ -1,0 +1,80 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  name: ReDeployAgentPool
+
+steps:
+- task: TerraformTask@5
+  displayName: 執行 init (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub1'
+    backendAzureRmUseEntraIdForAuthentication: false
+    backendServiceArm: '$(SVCARM1)'
+    backendAzureRmOverrideSubscriptionID: '$(SubID1)'
+    backendAzureRmResourceGroupName: '$(SARG1)'
+    backendAzureRmStorageAccountName: '$(SAName1)'
+    backendAzureRmContainerName: '$(CName1)'
+    backendAzureRmKey: '$(SAKey1)'
+
+- task: TerraformTask@5
+  displayName: 執行 plan (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    commandOptions: '-destroy -out=destroy.tfplan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub1'
+    environmentServiceNameAzureRM: '$(SVCARM1)'
+    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+
+- task: TerraformTask@5
+  displayName: 執行 destroy (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'destroy'
+    commandOptions: '-auto-approve'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub1'
+    environmentServiceNameAzureRM: '$(SVCARM1)'
+    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+
+
+- task: TerraformTask@5
+  displayName: 執行 init (Sub2)
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
+    backendAzureRmUseEntraIdForAuthentication: false
+    backendServiceArm: '$(SVCARM2)'
+    backendAzureRmOverrideSubscriptionID: '$(SubID2)'
+    backendAzureRmResourceGroupName: '$(SARG2)'
+    backendAzureRmStorageAccountName: '$(SAName2)'
+    backendAzureRmContainerName: '$(CName2)'
+    backendAzureRmKey: '$(SAKey2)'
+
+- task: TerraformTask@5
+  displayName: 執行 plan (Sub2)
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    commandOptions: '-destroy -out=destroy.tfplan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
+    environmentServiceNameAzureRM: '$(SVCARM2)'
+    environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
+
+- task: TerraformTask@5
+  displayName: 執行 destroy (Sub2)
+  inputs:
+    provider: 'azurerm'
+    command: 'destroy'
+    commandOptions: '-auto-approve'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
+    environmentServiceNameAzureRM: '$(SVCARM2)'
+    environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
