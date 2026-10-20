@@ -15,7 +15,7 @@ steps:
   inputs:
     provider: 'azurerm'
     command: 'init'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub1/'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub1'
     backendAzureRmUseEntraIdForAuthentication: false
     backendServiceArm: '$(SVCARM1)'
     backendAzureRmOverrideSubscriptionID: '$(SubID1)'
@@ -29,6 +29,7 @@ steps:
   inputs:
     provider: 'azurerm'
     command: 'plan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub1'
     environmentServiceNameAzureRM: '$(SVCARM1)'
     environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
@@ -37,6 +38,7 @@ steps:
   inputs:
     provider: 'azurerm'
     command: 'apply'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub1'
     environmentServiceNameAzureRM: '$(SVCARM1)'
     environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
@@ -46,7 +48,7 @@ steps:
   inputs:
     provider: 'azurerm'
     command: 'init'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2/'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
     backendAzureRmUseEntraIdForAuthentication: false
     backendServiceArm: '$(SVCARM2)'
     backendAzureRmOverrideSubscriptionID: '$(SubID2)'
@@ -60,6 +62,7 @@ steps:
   inputs:
     provider: 'azurerm'
     command: 'plan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
     environmentServiceNameAzureRM: '$(SVCARM2)'
     environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
 
@@ -68,5 +71,6 @@ steps:
   inputs:
     provider: 'azurerm'
     command: 'apply'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
     environmentServiceNameAzureRM: '$(SVCARM2)'
     environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
