@@ -13,13 +13,13 @@ pool:
 steps:
 
 - task: PowerShell@2
-  displayName: 設定 ALZ 管理群組架構
+  displayName: 設定管理群組
   inputs:
 #    filePath: 'https://raw.githubusercontent.com/VirexSyscom/2026ASP/refs/heads/main/Custom1/Alz-MG/ALZMG-Deploy.ps'
     workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Alz-MG'
 
 - task: TerraformTask@5
-  displayName: 確認環境 (Sub1)
+  displayName: 確認 Azure 環境 (Sub1)
   inputs:
     provider: 'azurerm'
     command: 'init'
@@ -42,7 +42,7 @@ steps:
     environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
 - task: TerraformTask@5
-  displayName: 建立資源群組與資源 (Sub1)
+  displayName: 建立 Azure 資源 (Sub1)
   inputs:
     provider: 'azurerm'
     command: 'apply'
@@ -52,7 +52,7 @@ steps:
 
 
 - task: TerraformTask@5
-  displayName: 確認環境 (Sub2)
+  displayName: 確認 Azure 環境 (Sub2)
   inputs:
     provider: 'azurerm'
     command: 'init'
@@ -75,7 +75,7 @@ steps:
     environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
 
 - task: TerraformTask@5
-  displayName: 建立資源群組與資源 (Sub2)
+  displayName: 建立 Azure 資源 (Sub2)
   inputs:
     provider: 'azurerm'
     command: 'apply'
