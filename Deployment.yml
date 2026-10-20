@@ -9,7 +9,6 @@ trigger:
 pool:
   name: ReDeployAgentPool
 
-# Sub_Workload
 steps:
 - task: TerraformTask@5
   displayName: Sub_Workload 執行 terraform init
@@ -42,8 +41,6 @@ steps:
     environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
 
-# Sub_Connectivity
-steps:
 - task: TerraformTask@5
   displayName: Sub_WorkSub_Connectivity 執行 terraform init
   inputs:
@@ -73,4 +70,3 @@ steps:
     command: 'apply'
     environmentServiceNameAzureRM: '$(SVCARM2)'
     environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
-
