@@ -13,12 +13,13 @@ pool:
 steps:
 
 - task: PowerShell@2
+  displayName: 設定 ALZ 管理群組架構
   inputs:
 #    filePath: 'https://raw.githubusercontent.com/VirexSyscom/2026ASP/refs/heads/main/Custom1/Alz-MG/ALZMG-Deploy.ps'
     workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Alz-MG'
 
 - task: TerraformTask@5
-  displayName: Sub_Workload 執行 terraform init
+  displayName: 確認環境 (Sub1)
   inputs:
     provider: 'azurerm'
     command: 'init'
@@ -32,7 +33,7 @@ steps:
     backendAzureRmKey: '$(SAKey1)'
 
 - task: TerraformTask@5
-  displayName: Sub_Workload 執行 terraform plan
+  displayName: 建立資源列表 (Sub1)
   inputs:
     provider: 'azurerm'
     command: 'plan'
@@ -41,7 +42,7 @@ steps:
     environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
 - task: TerraformTask@5
-  displayName: Sub_Workload 執行 terraform apply
+  displayName: 建立資源群組與資源 (Sub1)
   inputs:
     provider: 'azurerm'
     command: 'apply'
@@ -51,7 +52,7 @@ steps:
 
 
 - task: TerraformTask@5
-  displayName: Sub_WorkSub_Connectivity 執行 terraform init
+  displayName: 確認環境 (Sub2)
   inputs:
     provider: 'azurerm'
     command: 'init'
@@ -65,7 +66,7 @@ steps:
     backendAzureRmKey: '$(SAKey2)'
 
 - task: TerraformTask@5
-  displayName: Sub_WorkSub_Connectivity 執行 terraform plan
+  displayName: 建立資源列表 (Sub2)
   inputs:
     provider: 'azurerm'
     command: 'plan'
@@ -74,7 +75,7 @@ steps:
     environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
 
 - task: TerraformTask@5
-  displayName: Sub_WorkSub_Connectivity 執行 terraform apply
+  displayName: 建立資源群組與資源 (Sub2)
   inputs:
     provider: 'azurerm'
     command: 'apply'
