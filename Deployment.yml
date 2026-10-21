@@ -82,3 +82,9 @@ steps:
     workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
     environmentServiceNameAzureRM: '$(SVCARM2)'
     environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
+
+- task: PowerShell@2
+  displayName: 建立帳號 & 指派角色
+  inputs:
+    filePath: '$(Build.SourcesDirectory)/Custom1/Acc-Role/Create-EntraUsers-AssignRBAC.ps1'
+#    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Alz-MG'
