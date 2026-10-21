@@ -10,6 +10,11 @@ pool:
   name: ReDeployAgentPool
 
 steps:
+- task: PowerShell@2
+  displayName: 移除角色 & 刪除帳號
+  inputs:
+    filePath: '$(Build.SourcesDirectory)/Custom1/Acc-Role/Remove-EntraUsers-RBAC.ps1'
+#    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Alz-MG'
 - task: TerraformTask@5
   displayName: 確認環境 (Sub1)
   inputs:
