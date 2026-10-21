@@ -11,7 +11,7 @@ pool:
 
 steps:
 - task: TerraformTask@5
-  displayName: 執行 init (Sub1)
+  displayName: 確認環境 (Sub1)
   inputs:
     provider: 'azurerm'
     command: 'init'
@@ -25,7 +25,7 @@ steps:
     backendAzureRmKey: '$(SAKey1)'
 
 - task: TerraformTask@5
-  displayName: 執行 plan (Sub1)
+  displayName: 確認列表 (Sub1)
   inputs:
     provider: 'azurerm'
     command: 'plan'
@@ -35,7 +35,7 @@ steps:
     environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
 - task: TerraformTask@5
-  displayName: 執行 destroy (Sub1)
+  displayName: 刪除資源 (Sub1)
   inputs:
     provider: 'azurerm'
     command: 'destroy'
@@ -46,7 +46,7 @@ steps:
 
 
 - task: TerraformTask@5
-  displayName: 執行 init (Sub2)
+  displayName: 確認環境 (Sub2)
   inputs:
     provider: 'azurerm'
     command: 'init'
@@ -60,7 +60,7 @@ steps:
     backendAzureRmKey: '$(SAKey2)'
 
 - task: TerraformTask@5
-  displayName: 執行 plan (Sub2)
+  displayName: 確認列表 (Sub2)
   inputs:
     provider: 'azurerm'
     command: 'plan'
@@ -70,7 +70,7 @@ steps:
     environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
 
 - task: TerraformTask@5
-  displayName: 執行 destroy (Sub2)
+  displayName: 刪除資源 (Sub2)
   inputs:
     provider: 'azurerm'
     command: 'destroy'
@@ -78,3 +78,9 @@ steps:
     workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
     environmentServiceNameAzureRM: '$(SVCARM2)'
     environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
+
+- task: PowerShell@2
+  displayName: 刪除管理群組
+  inputs:
+    filePath: '$(Build.SourcesDirectory)/Custom1/Alz-MG/ALZMG-Destroy.ps1'
+#    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Alz-MG'
