@@ -13,7 +13,7 @@ $ALZMG = "ALZ"     # ALZ 最上層管理群組 ID
 Write-Host "取得 Tenant Root Group"
 $TenantRootGroup = (Get-AzContext).Tenant.Id
 
-if (:IsNullOrWhiteSpace($TenantRootGroup)) {
+if (-not $TenantRootGroup) {
     throw "無法從 Get-AzContext 取得 Tenant ID，請確認 Service Connection 登入狀態"
 }
 
