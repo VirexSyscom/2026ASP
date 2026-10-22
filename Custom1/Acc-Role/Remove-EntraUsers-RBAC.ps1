@@ -105,17 +105,17 @@ $connectivitySub = Resolve-Subscription $ConnectivitySubscription
 # 2. 要刪除的帳號清單 (與建立腳本一致，UPN 原樣保留)
 # ------------------------------------------------------------
 $targets = @(
-    @{ Upn='Workload_Sub_Contributer@ai365.com.tw';     Role='Contributor'; Type='Sub'; Target=$workloadSub.Id }
-    @{ Upn='Connectivity_Sub_Contributer@ai365.com.tw'; Role='Contributor'; Type='Sub'; Target=$connectivitySub.Id }
+    @{ Upn='Workload_Sub_Contributor@ai365.com.tw';     Role='Contributor'; Type='Sub'; Target=$workloadSub.Id }
+    @{ Upn='Connectivity_Sub_Contributor@ai365.com.tw'; Role='Contributor'; Type='Sub'; Target=$connectivitySub.Id }
 
-    @{ Upn='ALZMG_Owenr@ai365.com.tw';   Role='Owner'; Type='MG'; Target=$AlzMgName }
-    @{ Upn='APMG_Owenr@ai365.com.tw';    Role='Owner'; Type='MG'; Target=$ApMgName }
-    @{ Upn='InfraMG_Owenr@ai365.com.tw'; Role='Owner'; Type='MG'; Target=$InfraMgName }
+    @{ Upn='ALZMG_Contributor@ai365.com.tw';   Role='Contributor'; Type='MG'; Target=$AlzMgName }
+    @{ Upn='APMG_Contributor@ai365.com.tw';    Role='Contributor'; Type='MG'; Target=$ApMgName }
+    @{ Upn='InfraMG_Contributor@ai365.com.tw'; Role='Contributor'; Type='MG'; Target=$InfraMgName }
 
-    @{ Upn='Spoke_HR_RG_Ower@ai365.com.tw';       Role='Owner'; Type='RG'; Target='Spoke-HR-RG';      Hint=$workloadSub.Id }
-    @{ Upn='UAT_Spoke_HR_RG_Ower@ai365.com.tw';   Role='Owner'; Type='RG'; Target='UAT-Spoke-HR-RG';  Hint=$workloadSub.Id }
-    @{ Upn='AzureMigrateRG_Owenr@ai365.com.tw';   Role='Owner'; Type='RG'; Target='AzureMigrateRG';   Hint=$workloadSub.Id }
-    @{ Upn='Spoke_Network_RG_Owenr@ai365.com.tw'; Role='Owner'; Type='RG'; Target='Spoke-Network-RG'; Hint=$workloadSub.Id }
+    @{ Upn='Spoke_HR_RG_Owner@ai365.com.tw';       Role='Owner'; Type='RG'; Target='Spoke-HR-RG';      Hint=$workloadSub.Id }
+    @{ Upn='UAT_Spoke_HR_RG_Owner@ai365.com.tw';   Role='Owner'; Type='RG'; Target='UAT-Spoke-HR-RG';  Hint=$workloadSub.Id }
+    @{ Upn='AzureMigrateRG_Owner@ai365.com.tw';   Role='Owner'; Type='RG'; Target='AzureMigrateRG';   Hint=$workloadSub.Id }
+    @{ Upn='Spoke_Network_RG_Owner@ai365.com.tw'; Role='Owner'; Type='RG'; Target='Spoke-Network-RG'; Hint=$workloadSub.Id }
     @{ Upn='Hub_Network_RG_Owner@ai365.com.tw';   Role='Owner'; Type='RG'; Target='Hub-Network-RG';   Hint=$connectivitySub.Id }
 )
 
