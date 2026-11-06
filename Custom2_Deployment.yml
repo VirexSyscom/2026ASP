@@ -9,45 +9,49 @@ trigger:
 pool:
   name: ReDeployAgentPool
 
-
-steps:
+jobs:
+- job: DeployTerraform
+  displayName: Terraform 部署
+  timeoutInMinutes: 0          # 0 = 不限時間（僅自架 agent 有效）
+  cancelTimeoutInMinutes: 5    # 手動取消時，等待 task 收尾的分鐘數
+  steps:
 
 #- task: PowerShell@2
 #  displayName: 設定管理群組
 #  inputs:
 #    filePath: '$(Build.SourcesDirectory)/Custom1/Alz-MG/ALZMG-Deploy.ps1'
 
-- task: TerraformTask@5
-  displayName: 確認 Azure 環境 (Sub1)
-  inputs:
-    provider: 'azurerm'
-    command: 'init'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
-    backendAzureRmUseEntraIdForAuthentication: false
-    backendServiceArm: '$(SVCARM1)'
-    backendAzureRmOverrideSubscriptionID: '$(SubID1)'
-    backendAzureRmResourceGroupName: '$(SARG1)'
-    backendAzureRmStorageAccountName: '$(SAName1)'
-    backendAzureRmContainerName: '$(CName1)'
-    backendAzureRmKey: '$(SAKey1)'
+  - task: TerraformTask@5
+    displayName: 確認 Azure 環境 (Sub1)
+    inputs:
+      provider: 'azurerm'
+      command: 'init'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
+      backendAzureRmUseEntraIdForAuthentication: false
+      backendServiceArm: '$(SVCARM1)'
+      backendAzureRmOverrideSubscriptionID: '$(SubID1)'
+      backendAzureRmResourceGroupName: '$(SARG1)'
+      backendAzureRmStorageAccountName: '$(SAName1)'
+      backendAzureRmContainerName: '$(CName1)'
+      backendAzureRmKey: '$(SAKey1)'
 
-- task: TerraformTask@5
-  displayName: 建立資源列表 (Sub1)
-  inputs:
-    provider: 'azurerm'
-    command: 'plan'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
-    environmentServiceNameAzureRM: '$(SVCARM1)'
-    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+  - task: TerraformTask@5
+    displayName: 建立資源列表 (Sub1)
+    inputs:
+      provider: 'azurerm'
+      command: 'plan'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
+      environmentServiceNameAzureRM: '$(SVCARM1)'
+      environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
-- task: TerraformTask@5
-  displayName: 建立 Azure 資源 (Sub1)
-  inputs:
-    provider: 'azurerm'
-    command: 'apply'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
-    environmentServiceNameAzureRM: '$(SVCARM1)'
-    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+  - task: TerraformTask@5
+    displayName: 建立 Azure 資源 (Sub1)
+    inputs:
+      provider: 'azurerm'
+      command: 'apply'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
+      environmentServiceNameAzureRM: '$(SVCARM1)'
+      environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
 
 #- task: TerraformTask@5
