@@ -890,6 +890,12 @@ resource "azapi_resource" "arc_machine" {
   location  = local.crm_rg_location
   parent_id = local.crm_rg_id
 
+  # 【修正】HCRP400: Missing or invalid properties: Managed Identity
+  # Microsoft.HybridCompute/machines 的 PUT 必須帶系統指派受控識別
+  identity {
+    type = "SystemAssigned"
+  }
+
   body = {
     properties = {
       osType = "windows"
