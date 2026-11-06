@@ -133,10 +133,16 @@ mi_license_type       = "LicenseIncluded"
 crm_database_name     = "CRMData"
 
 ############################################
-# Azure Arc SQL Server（預設關閉，說明見 variables.tf）
+# Azure Arc SQL Server
+#   true = 以 azapi 建立 Arc 機器 / SQL Server 執行個體 / 5 個資料庫的資源紀錄，
+#          不需真實主機連線；顯示的版本與狀態皆為下方靜態值。
+#   部署前請先註冊 Microsoft.HybridCompute 與 Microsoft.AzureArcData。
 ############################################
-create_arc_sql_resources = false
+create_arc_sql_resources = true
 arc_machine_name         = "CRM-DB"
+arc_sql_edition          = "Standard"
+arc_sql_version          = "SQL Server 2022"
+arc_sql_status           = "Connected"
 arc_sql_database_names   = ["CRMData", "master", "model", "msdb", "tempdb"]
 
 ############################################

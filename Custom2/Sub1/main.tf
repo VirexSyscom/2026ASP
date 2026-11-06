@@ -6,7 +6,7 @@
 #     1. 命名一律經由 local.name 統一表，套用 local.prefix 前綴
 #     2. 標籤一律以 merge(local.<層>_tags, { ResourceType = ... }) 產生
 #        例外：Private DNS Zone / VNet Link 限制最多 15 個標籤，
-#        改用精簡的 local.dns_tags（見下方說明）
+#        改用精簡的 local.dns_base_tags（見下方說明）
 #     3. 四個資源群組獨立保留：Spoke 網路 / CRM / AzureMigrateRG / ADF-RG
 #        RG 名稱一律不套用前綴，但標籤一律套用
 #     4. 每個 RG 皆支援 create_<層>_resource_group 切換「新建 / 沿用既有」
@@ -27,7 +27,9 @@
 #     - VirtualCluster*：建立 SQL 受控執行個體時由 Azure 自動產生
 #     - Private Endpoint 的 NIC：由 Private Endpoint 自動產生（adf-pe-nic 除外，
 #       因入口網站現況為自訂名稱，此處以 custom_network_interface_name 指定）
-#     - Arc 機器 / SQL Server 執行個體 / 資料庫：預設關閉，見 var.create_arc_sql_resources
+#
+#   以 azapi 建立「資源紀錄」的項目（不需真實主機連線）：
+#     - Arc 機器 / SQL Server 執行個體 / 5 個資料庫，見 var.create_arc_sql_resources
 ############################################
 
 data "azurerm_client_config" "current" {}
@@ -155,6 +157,7 @@ resource "random_string" "mi_suffix" {
   length  = 4
   upper   = false
   special = false
+
   keepers = {
     prefix = local.prefix
   }
@@ -165,6 +168,7 @@ resource "random_string" "migrate_suffix" {
   length  = 4
   upper   = false
   special = false
+
   keepers = {
     prefix = local.prefix
   }
@@ -175,6 +179,7 @@ resource "random_string" "adf_suffix" {
   length  = 4
   upper   = false
   special = false
+
   keepers = {
     prefix = local.prefix
   }
@@ -196,6 +201,7 @@ resource "azurerm_resource_group" "network" {
   count    = var.create_network_resource_group ? 1 : 0
   name     = var.network_resource_group_name
   location = var.location
+
   tags = merge(local.network_tags, {
     ResourceType = "ResourceGroup"
   })
@@ -210,6 +216,7 @@ resource "azurerm_resource_group" "crm" {
   count    = var.create_crm_resource_group ? 1 : 0
   name     = var.crm_resource_group_name
   location = var.location
+
   tags = merge(local.crm_tags, {
     ResourceType = "ResourceGroup"
   })
@@ -224,6 +231,7 @@ resource "azurerm_resource_group" "migrate" {
   count    = var.create_migrate_resource_group ? 1 : 0
   name     = var.migrate_resource_group_name
   location = var.location
+
   tags = merge(local.migrate_tags, {
     ResourceType = "ResourceGroup"
   })
@@ -238,6 +246,7 @@ resource "azurerm_resource_group" "adf" {
   count    = var.create_adf_resource_group ? 1 : 0
   name     = var.adf_resource_group_name
   location = var.location
+
   tags = merge(local.adf_tags, {
     ResourceType = "ResourceGroup"
   })
@@ -251,6 +260,7 @@ resource "azurerm_virtual_network" "spoke" {
   location            = local.network_rg_location
   resource_group_name = local.network_rg_name
   address_space       = var.spoke_vnet_address_space
+
   tags = merge(local.network_tags, {
     ResourceType = "VirtualNetwork"
     Workload     = "Production"
@@ -273,6 +283,7 @@ resource "azurerm_subnet" "mi" {
 
   delegation {
     name = "managedinstancedelegation"
+
     service_delegation {
       name = "Microsoft.Sql/managedInstances"
       actions = [
@@ -299,6 +310,7 @@ resource "azurerm_network_security_group" "ap" {
   name                = local.name.ap_nsg
   location            = local.network_rg_location
   resource_group_name = local.network_rg_name
+
   tags = merge(local.network_tags, {
     ResourceType = "NetworkSecurityGroup"
     SubnetTier   = "Application"
@@ -339,6 +351,7 @@ resource "azurerm_network_security_group" "test" {
   name                = local.name.test_nsg
   location            = local.network_rg_location
   resource_group_name = local.network_rg_name
+
   tags = merge(local.network_tags, {
     ResourceType = "NetworkSecurityGroup"
     Purpose      = "Test"
@@ -356,6 +369,7 @@ resource "azurerm_network_security_group" "mi" {
   name                = local.name.mi_nsg
   location            = local.network_rg_location
   resource_group_name = local.network_rg_name
+
   tags = merge(local.network_tags, {
     ResourceType = "NetworkSecurityGroup"
     SubnetTier   = "ManagedInstance"
@@ -480,6 +494,7 @@ resource "azurerm_route_table" "mi" {
   location                      = local.network_rg_location
   resource_group_name           = local.network_rg_name
   bgp_route_propagation_enabled = true
+
   tags = merge(local.network_tags, {
     ResourceType = "RouteTable"
     SubnetTier   = "ManagedInstance"
@@ -523,6 +538,7 @@ resource "azurerm_public_ip" "nat" {
   allocation_method   = "Static"
   sku                 = "Standard"
   zones               = ["1", "2", "3"]
+
   tags = merge(local.network_tags, {
     ResourceType = "PublicIP"
     Purpose      = "NAT-Egress"
@@ -535,6 +551,7 @@ resource "azurerm_nat_gateway" "spoke" {
   resource_group_name     = local.network_rg_name
   sku_name                = "Standard"
   idle_timeout_in_minutes = 4
+
   tags = merge(local.network_tags, {
     ResourceType = "NatGateway"
     Purpose      = "Outbound-Connectivity"
@@ -563,6 +580,7 @@ resource "azurerm_monitor_activity_log_alert" "nsg_rule_delete" {
   scopes              = [local.alert_scope]
   description         = "當 NSG 的安全性規則被刪除時觸發"
   enabled             = true
+
   tags = merge(local.network_tags, {
     ResourceType = "ActivityLogAlert"
     Purpose      = "Security-Monitoring"
@@ -575,6 +593,7 @@ resource "azurerm_monitor_activity_log_alert" "nsg_rule_delete" {
 
   dynamic "action" {
     for_each = var.alert_action_group_id != "" ? [var.alert_action_group_id] : []
+
     content {
       action_group_id = action.value
     }
@@ -589,6 +608,7 @@ resource "azurerm_user_assigned_identity" "vm" {
   name                = local.name.vm_identity
   location            = local.crm_rg_location
   resource_group_name = local.crm_rg_name
+
   tags = merge(local.crm_tags, {
     ResourceType = "ManagedIdentity"
   })
@@ -603,6 +623,7 @@ resource "azurerm_lb" "crm" {
   location            = local.crm_rg_location
   resource_group_name = local.crm_rg_name
   sku                 = "Standard"
+
   tags = merge(local.crm_tags, {
     ResourceType = "LoadBalancer"
     SubnetTier   = "Application"
@@ -648,6 +669,7 @@ resource "azurerm_network_interface" "crm" {
   name                = "${local.prefix}${each.value.nic_name}"
   location            = local.crm_rg_location
   resource_group_name = local.crm_rg_name
+
   tags = merge(local.crm_tags, {
     ResourceType = "NetworkInterface"
   })
@@ -678,6 +700,7 @@ resource "azurerm_windows_virtual_machine" "crm" {
   admin_username        = var.admin_username
   admin_password        = var.admin_password
   network_interface_ids = [azurerm_network_interface.crm[each.key].id]
+
   tags = merge(local.crm_tags, {
     ResourceType = "VirtualMachine"
     SubnetTier   = "Application"
@@ -717,6 +740,7 @@ resource "azurerm_managed_disk" "asr_seed" {
   storage_account_type = var.asr_seed_disk_storage_type
   create_option        = "Empty"
   disk_size_gb         = var.asr_seed_disk_size_gb
+
   tags = merge(local.crm_tags, {
     ResourceType = "ManagedDisk"
     Purpose      = "ASR-Seed"
@@ -736,6 +760,7 @@ resource "azurerm_shared_image_gallery" "crm" {
   resource_group_name = local.crm_rg_name
   location            = local.crm_rg_location
   description         = "CRM VM image gallery"
+
   tags = merge(local.crm_tags, {
     ResourceType = "ComputeGallery"
   })
@@ -749,6 +774,7 @@ resource "azurerm_shared_image" "crm" {
   os_type             = "Windows"
   hyper_v_generation  = "V2"
   specialized         = true
+
   tags = merge(local.crm_tags, {
     ResourceType = "SharedImage"
   })
@@ -777,6 +803,7 @@ resource "azurerm_snapshot" "crm_image_source" {
   resource_group_name = local.crm_rg_name
   create_option       = "Copy"
   source_resource_id  = data.azurerm_managed_disk.crm_image_source[0].id
+
   tags = merge(local.crm_tags, {
     ResourceType = "Snapshot"
     Purpose      = "GalleryImageSource"
@@ -791,7 +818,6 @@ resource "azurerm_shared_image_version" "crm" {
   image_name          = azurerm_shared_image.crm.name
   resource_group_name = local.crm_rg_name
   location            = local.crm_rg_location
-
   os_disk_snapshot_id = azurerm_snapshot.crm_image_source[0].id
 
   target_region {
@@ -821,6 +847,7 @@ resource "azurerm_mssql_managed_instance" "crm" {
 
   administrator_login          = var.sql_administrator_login
   administrator_login_password = var.sql_administrator_password
+
   license_type                 = var.mi_license_type
   sku_name                     = var.mi_sku_name
   vcores                       = var.mi_vcores
@@ -845,13 +872,15 @@ resource "azurerm_mssql_managed_database" "crm" {
 }
 
 ############################################
-# 【CRM】Azure Arc SQL Server（預設關閉）
+# 【CRM】Azure Arc SQL Server（不需真實主機連線）
 #   對應入口網站：
 #     CRM-DB（Machine - Azure Arc）
 #     CRM-DB（SQL Server 執行個體）
 #     CRMData / master / model / msdb / tempdb（SQL Server 資料庫）
-#   這些資源原本由 Arc Agent 與 SQL Server 擴充功能自動投影，
-#   azapi 僅建立 ARM 資源紀錄；schema 驗證關閉，啟用前請先 plan 確認。
+#   以 azapi 直接建立 ARM 資源紀錄，只有中繼資料；不會安裝 Arc Agent，
+#   Portal 顯示的版本、狀態皆為 var.arc_sql_* 的靜態值。
+#   部署前需註冊 Microsoft.HybridCompute 與 Microsoft.AzureArcData。
+#   schema_validation_enabled = false：避免 azapi 內建 schema 與 API 版本不符而擋下。
 ############################################
 resource "azapi_resource" "arc_machine" {
   count = var.create_arc_sql_resources ? 1 : 0
@@ -862,7 +891,9 @@ resource "azapi_resource" "arc_machine" {
   parent_id = local.crm_rg_id
 
   body = {
-    properties = {}
+    properties = {
+      osType = "windows"
+    }
   }
 
   tags = merge(local.crm_tags, {
@@ -881,11 +912,14 @@ resource "azapi_resource" "arc_sql_instance" {
   location  = local.crm_rg_location
   parent_id = local.crm_rg_id
 
+  # containerResourceId 與 status 為 API 必填欄位
   body = {
     properties = {
       containerResourceId = azapi_resource.arc_machine[0].id
-      edition             = "Standard"
-      version             = "SQL Server 2022"
+      status              = var.arc_sql_status
+      edition             = var.arc_sql_edition
+      version             = var.arc_sql_version
+      instanceName        = local.name.arc_sql_instance
     }
   }
 
@@ -907,6 +941,7 @@ resource "azapi_resource" "arc_sql_database" {
   body = {
     properties = {
       collationName = "SQL_Latin1_General_CP1_CI_AS"
+      state         = "Online"
     }
   }
 
@@ -932,6 +967,7 @@ resource "azurerm_monitor_metric_alert" "cpu" {
   severity                 = 2
   frequency                = "PT5M"
   window_size              = "PT15M"
+
   tags = merge(local.crm_tags, {
     ResourceType = "MetricAlert"
     Purpose      = "Performance-Monitoring"
@@ -947,6 +983,7 @@ resource "azurerm_monitor_metric_alert" "cpu" {
 
   dynamic "action" {
     for_each = var.alert_action_group_id != "" ? [var.alert_action_group_id] : []
+
     content {
       action_group_id = action.value
     }
@@ -962,6 +999,7 @@ resource "azurerm_monitor_metric_alert" "vm_availability" {
   severity                 = 1
   frequency                = "PT1M"
   window_size              = "PT5M"
+
   tags = merge(local.crm_tags, {
     ResourceType = "MetricAlert"
     Purpose      = "Availability-Monitoring"
@@ -977,6 +1015,7 @@ resource "azurerm_monitor_metric_alert" "vm_availability" {
 
   dynamic "action" {
     for_each = var.alert_action_group_id != "" ? [var.alert_action_group_id] : []
+
     content {
       action_group_id = action.value
     }
@@ -1101,6 +1140,7 @@ resource "azurerm_storage_account" "migrate" {
 resource "azurerm_private_dns_zone" "datafactory" {
   name                = "privatelink.datafactory.azure.net"
   resource_group_name = local.adf_rg_name
+
   tags = merge(local.dns_base_tags, {
     ResourceType = "PrivateDnsZone"
     Service      = "DataFactory"
@@ -1113,6 +1153,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "datafactory_spoke" {
   private_dns_zone_name = azurerm_private_dns_zone.datafactory.name
   virtual_network_id    = azurerm_virtual_network.spoke.id
   registration_enabled  = false
+
   tags = merge(local.dns_base_tags, {
     ResourceType = "PrivateDnsZoneLink"
   })

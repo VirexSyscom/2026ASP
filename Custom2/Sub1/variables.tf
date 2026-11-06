@@ -350,21 +350,54 @@ variable "crm_database_name" {
 ############################################
 # Azure Arc SQL Server（CRM-DB）
 #   「Machine - Azure Arc」、「SQL Server 執行個體」與其資料庫
-#   （CRMData / master / model / msdb / tempdb）原本由 Azure Arc Connected Machine Agent
-#   與 SQL Server 擴充功能在實體主機上自動投影而成，並非一般 IaC 建立的資源。
-#   預設關閉；設為 true 時以 azapi 直接建立 ARM 資源紀錄（僅是中繼資料，
-#   不會真的連線到主機），請先確認 azapi 的 API 版本與屬性符合你的環境。
+#   （CRMData / master / model / msdb / tempdb）。
+#   正常情況由 Azure Arc Connected Machine Agent 與 SQL Server 擴充功能
+#   在實體主機上自動投影；本組態改以 azapi 直接建立同類型的 ARM 資源紀錄，
+#   讓資源出現在資源群組中，「不需要」真實主機連線，也不會安裝任何 Agent。
+#   注意：這些只是中繼資料紀錄，Portal 上的狀態、版本等欄位都是下方變數填入的
+#   靜態值，不代表真實 SQL Server 的狀態。
+#   部署前請先註冊 Resource Provider：
+#     az provider register --namespace Microsoft.HybridCompute --wait
+#     az provider register --namespace Microsoft.AzureArcData --wait
 ############################################
 variable "create_arc_sql_resources" {
-  description = "是否以 azapi 建立 Azure Arc 機器 / SQL Server 執行個體 / 資料庫的 ARM 資源紀錄"
+  description = "是否以 azapi 建立 Azure Arc 機器 / SQL Server 執行個體 / 資料庫的 ARM 資源紀錄（不需真實主機）"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "arc_machine_name" {
   description = "Azure Arc 機器與 SQL Server 執行個體基底名稱（實際名稱會自動加上前綴）"
   type        = string
   default     = "CRM-DB"
+}
+
+variable "arc_sql_edition" {
+  description = "Arc SQL Server 執行個體顯示的版本類型（靜態值）"
+  type        = string
+  default     = "Standard"
+
+  validation {
+    condition     = contains(["Evaluation", "Enterprise", "Standard", "Web", "Developer", "Express"], var.arc_sql_edition)
+    error_message = "arc_sql_edition 必須為 Evaluation、Enterprise、Standard、Web、Developer 或 Express。"
+  }
+}
+
+variable "arc_sql_version" {
+  description = "Arc SQL Server 執行個體顯示的 SQL Server 版本（靜態值）"
+  type        = string
+  default     = "SQL Server 2022"
+}
+
+variable "arc_sql_status" {
+  description = "Arc SQL Server 執行個體顯示的連線狀態（靜態值，無真實主機時僅作標示）"
+  type        = string
+  default     = "Connected"
+
+  validation {
+    condition     = contains(["Connected", "Disconnected", "Registered", "Unknown"], var.arc_sql_status)
+    error_message = "arc_sql_status 必須為 Connected、Disconnected、Registered 或 Unknown。"
+  }
 }
 
 variable "arc_sql_database_names" {

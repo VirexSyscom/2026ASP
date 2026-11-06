@@ -107,7 +107,7 @@ output "virtual_machine_private_ips" {
 output "load_balancer" {
   description = "CRMAP-LB 內部負載平衡器"
   value = {
-    id                 = azurerm_lb.crm.id
+    id                  = azurerm_lb.crm.id
     frontend_private_ip = azurerm_lb.crm.frontend_ip_configuration[0].private_ip_address
   }
 }
@@ -143,12 +143,12 @@ output "asr_seed_disk_id" {
 }
 
 output "arc_sql" {
-  description = "Azure Arc SQL Server 資源（預設關閉）"
+  description = "Azure Arc SQL Server 資源紀錄（azapi 建立，不需真實主機）"
   value = {
-    created       = var.create_arc_sql_resources
-    machine_id    = try(azapi_resource.arc_machine[0].id, null)
-    instance_id   = try(azapi_resource.arc_sql_instance[0].id, null)
-    database_ids  = { for k, db in azapi_resource.arc_sql_database : k => db.id }
+    created      = var.create_arc_sql_resources
+    machine_id   = try(azapi_resource.arc_machine[0].id, null)
+    instance_id  = try(azapi_resource.arc_sql_instance[0].id, null)
+    database_ids = { for k, db in azapi_resource.arc_sql_database : k => db.id }
   }
 }
 
