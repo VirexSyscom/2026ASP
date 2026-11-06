@@ -882,6 +882,18 @@ resource "azurerm_mssql_managed_database" "crm" {
 #   部署前需註冊 Microsoft.HybridCompute 與 Microsoft.AzureArcData。
 #   schema_validation_enabled = false：避免 azapi 內建 schema 與 API 版本不符而擋下。
 ############################################
+# 【修正】HCRP400: Missing or invalid properties: VmId,ClientPublicKey
+# Arc 機器的 PUT 必須帶 vmId（GUID）與 clientPublicKey。
+# 沒有真實主機，所以 vmId 用 random_uuid 產生（寫入 state 後固定不變）；
+# clientPublicKey 為一次性產生的 RSA-2048「公鑰」（Base64 DER），不含私鑰。
+resource "random_uuid" "arc_machine_vm_id" {
+  count = var.create_arc_sql_resources ? 1 : 0
+}
+
+locals {
+  arc_machine_client_public_key = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsnC5jRBStw6ZbuyLx72JFVWV/vD4GA6u0NijvDW0GOTT33UN2nwqw71A42+6/uDTnWWDLvAqqq+FSrLAMJVRACJhK+zHpJrurlGyt2TQbx2XAt5cDOXWs1didp10OS1LIc/wrWB5TvJlOxecgfvPl9qEejPLkPm1VE3p/CLkPahacrc/Gq7D2zzmXyfmGH9izdWhKRowZMdMfnmLoL357BYorfaG7BDJjloxByju9xODCGW3adztxkdXPrPLBqg5DxvoU4H/FZ3JIsuqe2RC/Z0DmiKTfBBuICcpOxDHt9Bz8ZRUO3mew/BJw/Vs74HFrN8r/pZRiDjd6YFtBuL8KQIDAQAB"
+}
+
 resource "azapi_resource" "arc_machine" {
   count = var.create_arc_sql_resources ? 1 : 0
 
@@ -891,14 +903,15 @@ resource "azapi_resource" "arc_machine" {
   parent_id = local.crm_rg_id
 
   # 【修正】HCRP400: Missing or invalid properties: Managed Identity
-  # Microsoft.HybridCompute/machines 的 PUT 必須帶系統指派受控識別
   identity {
     type = "SystemAssigned"
   }
 
   body = {
     properties = {
-      osType = "windows"
+      osType          = "windows"
+      vmId            = random_uuid.arc_machine_vm_id[0].result
+      clientPublicKey = local.arc_machine_client_public_key
     }
   }
 
@@ -1038,7 +1051,6 @@ resource "azurerm_recovery_services_vault" "migrate" {
   resource_group_name           = local.migrate_rg_name
   sku                           = var.recovery_vault_sku
   storage_mode_type             = var.recovery_vault_storage_mode
-  soft_delete_enabled           = var.recovery_vault_soft_delete_enabled
   public_network_access_enabled = true
 
   identity {
