@@ -34,25 +34,25 @@ jobs:
       backendAzureRmContainerName: '$(CName1)'
       backendAzureRmKey: '$(SAKey1)'
 
-- task: TerraformTask@5
-  displayName: 確認資源列表 (Sub1)
-  inputs:
-    provider: 'azurerm'
-    command: 'plan'
-    commandOptions: '-destroy -out=destroy.tfplan'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
-    environmentServiceNameAzureRM: '$(SVCARM1)'
-    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+  - task: TerraformTask@5
+    displayName: 確認資源列表 (Sub1)
+    inputs:
+      provider: 'azurerm'
+      command: 'plan'
+      commandOptions: '-destroy -out=destroy.tfplan'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
+      environmentServiceNameAzureRM: '$(SVCARM1)'
+      environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
-- task: TerraformTask@5
-  displayName: 刪除 Azure 資源 (Sub1)
-  inputs:
-    provider: 'azurerm'
-    command: 'destroy'
-    commandOptions: '-auto-approve'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
-    environmentServiceNameAzureRM: '$(SVCARM1)'
-    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+  - task: TerraformTask@5
+    displayName: 刪除 Azure 資源 (Sub1)
+    inputs:
+      provider: 'azurerm'
+      command: 'destroy'
+      commandOptions: '-auto-approve'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
+      environmentServiceNameAzureRM: '$(SVCARM1)'
+      environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
 
 
 #- task: TerraformTask@5
