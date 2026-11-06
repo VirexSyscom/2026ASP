@@ -5,6 +5,8 @@
 #   統一格式：
 #     1. 命名一律經由 local.name 統一表，套用 local.prefix 前綴
 #     2. 標籤一律以 merge(local.<層>_tags, { ResourceType = ... }) 產生
+#        例外：Private DNS Zone / VNet Link 限制最多 15 個標籤，
+#        改用精簡的 local.dns_tags（見下方說明）
 #     3. 四個資源群組獨立保留：Spoke 網路 / CRM / AzureMigrateRG / ADF-RG
 #        RG 名稱一律不套用前綴，但標籤一律套用
 #     4. 每個 RG 皆支援 create_<層>_resource_group 切換「新建 / 沿用既有」
@@ -110,6 +112,20 @@ locals {
   migrate_tags = merge(local.common_tags, { Layer = "Migration", Workload = "AzureMigrate" }, var.migrate_tags)
   adf_tags     = merge(local.common_tags, { Layer = "Workload", Workload = "DataFactory" }, var.adf_tags)
 
+  # ---------- Private DNS 專用精簡標籤 ----------
+  # Private DNS Zone / VNet Link 最多只允許 15 個標籤（其他資源為 50 個），
+  # 若沿用 local.adf_tags（含 var.tags / var.adf_tags）容易超過上限，
+  # 回傳 400 BadRequest: The resource tags are invalid。
+  # 因此只保留必要標籤，固定最多 6 個。
+  dns_base_tags = merge(
+    {
+      Environment = var.environment
+      Owner       = var.owner
+      ManagedBy   = "Terraform"
+    },
+    var.cost_center == "" ? {} : { CostCenter = var.cost_center }
+  )
+
   # ---------- 資源群組解析 ----------
   network_rg_name     = var.create_network_resource_group ? azurerm_resource_group.network[0].name : data.azurerm_resource_group.network_existing[0].name
   network_rg_location = var.create_network_resource_group ? azurerm_resource_group.network[0].location : data.azurerm_resource_group.network_existing[0].location
@@ -139,7 +155,6 @@ resource "random_string" "mi_suffix" {
   length  = 4
   upper   = false
   special = false
-
   keepers = {
     prefix = local.prefix
   }
@@ -150,7 +165,6 @@ resource "random_string" "migrate_suffix" {
   length  = 4
   upper   = false
   special = false
-
   keepers = {
     prefix = local.prefix
   }
@@ -161,7 +175,6 @@ resource "random_string" "adf_suffix" {
   length  = 4
   upper   = false
   special = false
-
   keepers = {
     prefix = local.prefix
   }
@@ -183,7 +196,6 @@ resource "azurerm_resource_group" "network" {
   count    = var.create_network_resource_group ? 1 : 0
   name     = var.network_resource_group_name
   location = var.location
-
   tags = merge(local.network_tags, {
     ResourceType = "ResourceGroup"
   })
@@ -198,7 +210,6 @@ resource "azurerm_resource_group" "crm" {
   count    = var.create_crm_resource_group ? 1 : 0
   name     = var.crm_resource_group_name
   location = var.location
-
   tags = merge(local.crm_tags, {
     ResourceType = "ResourceGroup"
   })
@@ -213,7 +224,6 @@ resource "azurerm_resource_group" "migrate" {
   count    = var.create_migrate_resource_group ? 1 : 0
   name     = var.migrate_resource_group_name
   location = var.location
-
   tags = merge(local.migrate_tags, {
     ResourceType = "ResourceGroup"
   })
@@ -228,7 +238,6 @@ resource "azurerm_resource_group" "adf" {
   count    = var.create_adf_resource_group ? 1 : 0
   name     = var.adf_resource_group_name
   location = var.location
-
   tags = merge(local.adf_tags, {
     ResourceType = "ResourceGroup"
   })
@@ -242,7 +251,6 @@ resource "azurerm_virtual_network" "spoke" {
   location            = local.network_rg_location
   resource_group_name = local.network_rg_name
   address_space       = var.spoke_vnet_address_space
-
   tags = merge(local.network_tags, {
     ResourceType = "VirtualNetwork"
     Workload     = "Production"
@@ -265,7 +273,6 @@ resource "azurerm_subnet" "mi" {
 
   delegation {
     name = "managedinstancedelegation"
-
     service_delegation {
       name = "Microsoft.Sql/managedInstances"
       actions = [
@@ -292,7 +299,6 @@ resource "azurerm_network_security_group" "ap" {
   name                = local.name.ap_nsg
   location            = local.network_rg_location
   resource_group_name = local.network_rg_name
-
   tags = merge(local.network_tags, {
     ResourceType = "NetworkSecurityGroup"
     SubnetTier   = "Application"
@@ -333,7 +339,6 @@ resource "azurerm_network_security_group" "test" {
   name                = local.name.test_nsg
   location            = local.network_rg_location
   resource_group_name = local.network_rg_name
-
   tags = merge(local.network_tags, {
     ResourceType = "NetworkSecurityGroup"
     Purpose      = "Test"
@@ -351,7 +356,6 @@ resource "azurerm_network_security_group" "mi" {
   name                = local.name.mi_nsg
   location            = local.network_rg_location
   resource_group_name = local.network_rg_name
-
   tags = merge(local.network_tags, {
     ResourceType = "NetworkSecurityGroup"
     SubnetTier   = "ManagedInstance"
@@ -476,7 +480,6 @@ resource "azurerm_route_table" "mi" {
   location                      = local.network_rg_location
   resource_group_name           = local.network_rg_name
   bgp_route_propagation_enabled = true
-
   tags = merge(local.network_tags, {
     ResourceType = "RouteTable"
     SubnetTier   = "ManagedInstance"
@@ -520,7 +523,6 @@ resource "azurerm_public_ip" "nat" {
   allocation_method   = "Static"
   sku                 = "Standard"
   zones               = ["1", "2", "3"]
-
   tags = merge(local.network_tags, {
     ResourceType = "PublicIP"
     Purpose      = "NAT-Egress"
@@ -533,7 +535,6 @@ resource "azurerm_nat_gateway" "spoke" {
   resource_group_name     = local.network_rg_name
   sku_name                = "Standard"
   idle_timeout_in_minutes = 4
-
   tags = merge(local.network_tags, {
     ResourceType = "NatGateway"
     Purpose      = "Outbound-Connectivity"
@@ -562,7 +563,6 @@ resource "azurerm_monitor_activity_log_alert" "nsg_rule_delete" {
   scopes              = [local.alert_scope]
   description         = "當 NSG 的安全性規則被刪除時觸發"
   enabled             = true
-
   tags = merge(local.network_tags, {
     ResourceType = "ActivityLogAlert"
     Purpose      = "Security-Monitoring"
@@ -575,7 +575,6 @@ resource "azurerm_monitor_activity_log_alert" "nsg_rule_delete" {
 
   dynamic "action" {
     for_each = var.alert_action_group_id != "" ? [var.alert_action_group_id] : []
-
     content {
       action_group_id = action.value
     }
@@ -590,7 +589,6 @@ resource "azurerm_user_assigned_identity" "vm" {
   name                = local.name.vm_identity
   location            = local.crm_rg_location
   resource_group_name = local.crm_rg_name
-
   tags = merge(local.crm_tags, {
     ResourceType = "ManagedIdentity"
   })
@@ -605,7 +603,6 @@ resource "azurerm_lb" "crm" {
   location            = local.crm_rg_location
   resource_group_name = local.crm_rg_name
   sku                 = "Standard"
-
   tags = merge(local.crm_tags, {
     ResourceType = "LoadBalancer"
     SubnetTier   = "Application"
@@ -651,7 +648,6 @@ resource "azurerm_network_interface" "crm" {
   name                = "${local.prefix}${each.value.nic_name}"
   location            = local.crm_rg_location
   resource_group_name = local.crm_rg_name
-
   tags = merge(local.crm_tags, {
     ResourceType = "NetworkInterface"
   })
@@ -682,7 +678,6 @@ resource "azurerm_windows_virtual_machine" "crm" {
   admin_username        = var.admin_username
   admin_password        = var.admin_password
   network_interface_ids = [azurerm_network_interface.crm[each.key].id]
-
   tags = merge(local.crm_tags, {
     ResourceType = "VirtualMachine"
     SubnetTier   = "Application"
@@ -722,7 +717,6 @@ resource "azurerm_managed_disk" "asr_seed" {
   storage_account_type = var.asr_seed_disk_storage_type
   create_option        = "Empty"
   disk_size_gb         = var.asr_seed_disk_size_gb
-
   tags = merge(local.crm_tags, {
     ResourceType = "ManagedDisk"
     Purpose      = "ASR-Seed"
@@ -742,7 +736,6 @@ resource "azurerm_shared_image_gallery" "crm" {
   resource_group_name = local.crm_rg_name
   location            = local.crm_rg_location
   description         = "CRM VM image gallery"
-
   tags = merge(local.crm_tags, {
     ResourceType = "ComputeGallery"
   })
@@ -756,7 +749,6 @@ resource "azurerm_shared_image" "crm" {
   os_type             = "Windows"
   hyper_v_generation  = "V2"
   specialized         = true
-
   tags = merge(local.crm_tags, {
     ResourceType = "SharedImage"
   })
@@ -785,7 +777,6 @@ resource "azurerm_snapshot" "crm_image_source" {
   resource_group_name = local.crm_rg_name
   create_option       = "Copy"
   source_resource_id  = data.azurerm_managed_disk.crm_image_source[0].id
-
   tags = merge(local.crm_tags, {
     ResourceType = "Snapshot"
     Purpose      = "GalleryImageSource"
@@ -800,6 +791,7 @@ resource "azurerm_shared_image_version" "crm" {
   image_name          = azurerm_shared_image.crm.name
   resource_group_name = local.crm_rg_name
   location            = local.crm_rg_location
+
   os_disk_snapshot_id = azurerm_snapshot.crm_image_source[0].id
 
   target_region {
@@ -829,7 +821,6 @@ resource "azurerm_mssql_managed_instance" "crm" {
 
   administrator_login          = var.sql_administrator_login
   administrator_login_password = var.sql_administrator_password
-
   license_type                 = var.mi_license_type
   sku_name                     = var.mi_sku_name
   vcores                       = var.mi_vcores
@@ -941,7 +932,6 @@ resource "azurerm_monitor_metric_alert" "cpu" {
   severity                 = 2
   frequency                = "PT5M"
   window_size              = "PT15M"
-
   tags = merge(local.crm_tags, {
     ResourceType = "MetricAlert"
     Purpose      = "Performance-Monitoring"
@@ -957,7 +947,6 @@ resource "azurerm_monitor_metric_alert" "cpu" {
 
   dynamic "action" {
     for_each = var.alert_action_group_id != "" ? [var.alert_action_group_id] : []
-
     content {
       action_group_id = action.value
     }
@@ -973,7 +962,6 @@ resource "azurerm_monitor_metric_alert" "vm_availability" {
   severity                 = 1
   frequency                = "PT1M"
   window_size              = "PT5M"
-
   tags = merge(local.crm_tags, {
     ResourceType = "MetricAlert"
     Purpose      = "Availability-Monitoring"
@@ -989,7 +977,6 @@ resource "azurerm_monitor_metric_alert" "vm_availability" {
 
   dynamic "action" {
     for_each = var.alert_action_group_id != "" ? [var.alert_action_group_id] : []
-
     content {
       action_group_id = action.value
     }
@@ -1106,12 +1093,15 @@ resource "azurerm_storage_account" "migrate" {
 # 【ADF-RG】Private DNS Zone（名稱由 Azure Private Link 規範固定，不可加前綴）
 #   對應入口網站：privatelink.datafactory.azure.net
 #   Private DNS Zone 為全域資源，連結至 Spoke-VNET。
+#
+#   【修正】Private DNS Zone / VNet Link 最多 15 個標籤，
+#   改用 local.dns_base_tags（最多 4 個）+ ResourceType / Service（共最多 6 個），
+#   不再套用 local.adf_tags，避免 400 BadRequest（資源標籤無效）。
 ############################################
 resource "azurerm_private_dns_zone" "datafactory" {
   name                = "privatelink.datafactory.azure.net"
   resource_group_name = local.adf_rg_name
-
-  tags = merge(local.adf_tags, {
+  tags = merge(local.dns_base_tags, {
     ResourceType = "PrivateDnsZone"
     Service      = "DataFactory"
   })
@@ -1123,8 +1113,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "datafactory_spoke" {
   private_dns_zone_name = azurerm_private_dns_zone.datafactory.name
   virtual_network_id    = azurerm_virtual_network.spoke.id
   registration_enabled  = false
-
-  tags = merge(local.adf_tags, {
+  tags = merge(local.dns_base_tags, {
     ResourceType = "PrivateDnsZoneLink"
   })
 }
