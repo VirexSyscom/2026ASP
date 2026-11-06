@@ -1,1 +1,88 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
 
+trigger:
+- main
+
+pool:
+  name: ReDeployAgentPool
+
+
+steps:
+
+#- task: PowerShell@2
+#  displayName: 設定管理群組
+#  inputs:
+#    filePath: '$(Build.SourcesDirectory)/Custom1/Alz-MG/ALZMG-Deploy.ps1'
+
+- task: TerraformTask@5
+  displayName: 確認 Azure 環境 (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
+    backendAzureRmUseEntraIdForAuthentication: false
+    backendServiceArm: '$(SVCARM1)'
+    backendAzureRmOverrideSubscriptionID: '$(SubID1)'
+    backendAzureRmResourceGroupName: '$(SARG1)'
+    backendAzureRmStorageAccountName: '$(SAName1)'
+    backendAzureRmContainerName: '$(CName1)'
+    backendAzureRmKey: '$(SAKey1)'
+
+- task: TerraformTask@5
+  displayName: 建立資源列表 (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
+    environmentServiceNameAzureRM: '$(SVCARM1)'
+    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+
+- task: TerraformTask@5
+  displayName: 建立 Azure 資源 (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'apply'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub1'
+    environmentServiceNameAzureRM: '$(SVCARM1)'
+    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+
+
+#- task: TerraformTask@5
+#  displayName: 確認 Azure 環境 (Sub2)
+#  inputs:
+#    provider: 'azurerm'
+#    command: 'init'
+#    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
+#    backendAzureRmUseEntraIdForAuthentication: false
+#    backendServiceArm: '$(SVCARM2)'
+#    backendAzureRmOverrideSubscriptionID: '$(SubID2)'
+#    backendAzureRmResourceGroupName: '$(SARG2)'
+#    backendAzureRmStorageAccountName: '$(SAName2)'
+#    backendAzureRmContainerName: '$(CName2)'
+#    backendAzureRmKey: '$(SAKey2)'
+
+#- task: TerraformTask@5
+#  displayName: 建立資源列表 (Sub2)
+#  inputs:
+#    provider: 'azurerm'
+#    command: 'plan'
+#    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
+#    environmentServiceNameAzureRM: '$(SVCARM2)'
+#    environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
+
+#- task: TerraformTask@5
+#  displayName: 建立 Azure 資源 (Sub2)
+#  inputs:
+#    provider: 'azurerm'
+#    command: 'apply'
+#    workingDirectory: '$(System.DefaultWorkingDirectory)/Custom1/Sub2'
+#    environmentServiceNameAzureRM: '$(SVCARM2)'
+#    environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
+
+#- task: PowerShell@2
+#  displayName: 建立帳號 & 指派角色
+#  inputs:
+#    filePath: '$(Build.SourcesDirectory)/Custom1/Acc-Role/Create-EntraUsers-AssignRBAC.ps1'
