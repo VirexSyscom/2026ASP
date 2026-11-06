@@ -882,16 +882,13 @@ resource "azurerm_mssql_managed_database" "crm" {
 #   部署前需註冊 Microsoft.HybridCompute 與 Microsoft.AzureArcData。
 #   schema_validation_enabled = false：避免 azapi 內建 schema 與 API 版本不符而擋下。
 ############################################
-# 【修正】HCRP400: Missing or invalid properties: VmId,ClientPublicKey
-# Arc 機器的 PUT 必須帶 vmId（GUID）與 clientPublicKey。
-# 沒有真實主機，所以 vmId 用 random_uuid 產生（寫入 state 後固定不變）；
-# clientPublicKey 為一次性產生的 RSA-2048「公鑰」（Base64 DER），不含私鑰。
+# vmId 以 random_uuid 產生（寫入 state 後固定）；clientPublicKey 為一次性產生的 RSA-2048 公鑰（Base64 DER，不含私鑰）
 resource "random_uuid" "arc_machine_vm_id" {
   count = var.create_arc_sql_resources ? 1 : 0
 }
 
 locals {
-  arc_machine_client_public_key = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsnC5jRBStw6ZbuyLx72JFVWV/vD4GA6u0NijvDW0GOTT33UN2nwqw71A42+6/uDTnWWDLvAqqq+FSrLAMJVRACJhK+zHpJrurlGyt2TQbx2XAt5cDOXWs1didp10OS1LIc/wrWB5TvJlOxecgfvPl9qEejPLkPm1VE3p/CLkPahacrc/Gq7D2zzmXyfmGH9izdWhKRowZMdMfnmLoL357BYorfaG7BDJjloxByju9xODCGW3adztxkdXPrPLBqg5DxvoU4H/FZ3JIsuqe2RC/Z0DmiKTfBBuICcpOxDHt9Bz8ZRUO3mew/BJw/Vs74HFrN8r/pZRiDjd6YFtBuL8KQIDAQAB"
+  arc_machine_client_public_key = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwNnb65ThyVlL0s/lKDVULK0h+AITiAiOaD2oCXZund09aBoa016bEUO5FU0F8XeYDdVlkzFhLkxrg2WO+0vtzNXCteW5iff1uZdYTkG8YPyO590naLIxaLsXR4EmRwJmMslBr16s92yrDv/FgytIrgtFsZatV2us0+7iT+jUxcImzSkzAJoBWgq98tIUaXXSo4IW/3XtDZhjttX4p5qIHWQqugxoonFRuEQfTIbYWfXJ8Hq5lgqKhvT3zqJLeVsQFqFQdzKgwBrJ1nBfidtlSduWl8gEk/AAzY42psa1SlaIOl1KtOWWDsfc/d2zQNo+ebQUmE9Wv3CnKJqzPDpudQIDAQAB"
 }
 
 resource "azapi_resource" "arc_machine" {
@@ -902,11 +899,12 @@ resource "azapi_resource" "arc_machine" {
   location  = local.crm_rg_location
   parent_id = local.crm_rg_id
 
-  # 【修正】HCRP400: Missing or invalid properties: Managed Identity
+  # 【修正】HCRP400: Managed Identity
   identity {
     type = "SystemAssigned"
   }
 
+  # 【修正】HCRP400: VmId, ClientPublicKey
   body = {
     properties = {
       osType          = "windows"
@@ -949,18 +947,36 @@ resource "azapi_resource" "arc_sql_instance" {
   schema_validation_enabled = false
 }
 
+# 5 個 SQL Server 資料庫（CRMData + 4 個系統資料庫）
+# 清單與屬性直接定義於此，不再依賴 var.arc_sql_database_names，
+# 避免變數值缺漏或被覆蓋而導致資料庫沒有被建立。
+locals {
+  arc_sql_databases = {
+    CRMData = { recovery_mode = "Full", size_mb = 1024, space_available_mb = 512 }
+    master  = { recovery_mode = "Simple", size_mb = 8, space_available_mb = 2 }
+    model   = { recovery_mode = "Full", size_mb = 16, space_available_mb = 4 }
+    msdb    = { recovery_mode = "Simple", size_mb = 32, space_available_mb = 8 }
+    tempdb  = { recovery_mode = "Simple", size_mb = 16, space_available_mb = 8 }
+  }
+}
+
 resource "azapi_resource" "arc_sql_database" {
-  for_each = var.create_arc_sql_resources ? var.arc_sql_database_names : toset([])
+  for_each = var.create_arc_sql_resources ? local.arc_sql_databases : {}
 
   type      = "Microsoft.AzureArcData/sqlServerInstances/databases@2024-01-01"
-  name      = each.value
+  name      = each.key
   location  = local.crm_rg_location
   parent_id = azapi_resource.arc_sql_instance[0].id
 
   body = {
     properties = {
-      collationName = "SQL_Latin1_General_CP1_CI_AS"
-      state         = "Online"
+      collationName      = "SQL_Latin1_General_CP1_CI_AS"
+      compatibilityLevel = 150
+      state              = "Online"
+      isReadOnly         = false
+      recoveryMode       = each.value.recovery_mode
+      sizeMB             = each.value.size_mb
+      spaceAvailableMB   = each.value.space_available_mb
     }
   }
 
@@ -969,6 +985,8 @@ resource "azapi_resource" "arc_sql_database" {
   })
 
   schema_validation_enabled = false
+
+  depends_on = [azapi_resource.arc_sql_instance]
 }
 
 ############################################
