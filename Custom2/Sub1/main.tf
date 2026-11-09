@@ -70,6 +70,7 @@ locals {
     asr_seed_disk    = "${local.prefix}${var.asr_seed_disk_name}"
     managed_instance = "${local.prefix_compact}${var.mi_name}${random_string.mi_suffix.result}"
     managed_database = "${local.prefix}${var.crm_database_name}"
+    sql_server       = substr(lower("${local.prefix}${var.sql_server_base_name}-${random_string.sql_server_suffix.result}"), 0, 63)
     arc_machine      = "${local.prefix}${var.arc_machine_name}"
     arc_sql_instance = "${local.prefix}${var.arc_machine_name}"
     alert_cpu        = "${local.prefix}Percentage CPU more ${var.cpu_alert_threshold}"
@@ -160,6 +161,18 @@ resource "random_string" "mi_suffix" {
 
   keepers = {
     prefix = local.prefix
+  }
+}
+
+# Azure SQL logical server（DNS 名稱需全域唯一）
+resource "random_string" "sql_server_suffix" {
+  length  = 8
+  upper   = false
+  special = false
+
+  keepers = {
+    resource_group = local.crm_rg_name
+    base_name      = var.sql_server_base_name
   }
 }
 
@@ -869,6 +882,43 @@ resource "azurerm_mssql_managed_instance" "crm" {
 resource "azurerm_mssql_managed_database" "crm" {
   name                = local.name.managed_database
   managed_instance_id = azurerm_mssql_managed_instance.crm.id
+}
+
+############################################
+# 【CRM】Azure SQL logical server + 5 個實體資料庫
+#   與 Azure Arc 完全無關；資料庫會真正建立在 Azure SQL Database。
+#   不使用 master/model/msdb/tempdb：這些是系統資料庫名稱，不應被當成
+#   5 個可獨立建立與管理的使用者資料庫資源。
+############################################
+resource "azurerm_mssql_server" "crm_databases" {
+  name                         = local.name.sql_server
+  resource_group_name          = local.crm_rg_name
+  location                     = local.crm_rg_location
+  version                      = "12.0"
+  administrator_login          = var.sql_administrator_login
+  administrator_login_password = var.sql_administrator_password
+  minimum_tls_version          = "1.2"
+  public_network_access_enabled = var.sql_public_network_access_enabled
+
+  tags = merge(local.crm_tags, {
+    ResourceType = "AzureSqlLogicalServer"
+  })
+}
+
+resource "azurerm_mssql_database" "crm_databases" {
+  for_each = toset(var.sql_database_names)
+
+  name           = each.value
+  server_id      = azurerm_mssql_server.crm_databases.id
+  collation      = var.sql_database_collation
+  sku_name       = var.sql_database_sku_name
+  max_size_gb    = var.sql_database_max_size_gb
+  zone_redundant = false
+
+  tags = merge(local.crm_tags, {
+    ResourceType = "AzureSqlDatabase"
+    DatabaseName = each.value
+  })
 }
 
 ############################################

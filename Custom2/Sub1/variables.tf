@@ -228,8 +228,7 @@ variable "vm_size" {
 
 ############################################
 # 憑證
-#   預設密碼為 Syscom2026（僅適用測試 / 展示環境）。
-#   正式環境請改以 Azure DevOps 的 secret 變數覆寫：
+#   密碼請由 Azure DevOps 的 secret 變數注入；不要提交到 Git：
 #     TF_VAR_admin_password
 #     TF_VAR_sql_administrator_password
 ############################################
@@ -240,9 +239,8 @@ variable "admin_username" {
 }
 
 variable "admin_password" {
-  description = "VM 本機管理員密碼。預設 Syscom2026；正式環境請以 TF_VAR_admin_password 或 Key Vault 覆寫。"
+  description = "VM 本機管理員密碼；請以 Azure DevOps secret 變數 TF_VAR_admin_password 注入。"
   type        = string
-  default     = "Syscom2026"
   sensitive   = true
 }
 
@@ -253,9 +251,8 @@ variable "sql_administrator_login" {
 }
 
 variable "sql_administrator_password" {
-  description = "SQL 受控執行個體管理員密碼。預設 Syscom2026；正式環境請以 TF_VAR_sql_administrator_password 或 Key Vault 覆寫。"
+  description = "SQL 管理員密碼；請以 Azure DevOps secret 變數 TF_VAR_sql_administrator_password 注入。"
   type        = string
-  default     = "Syscom2026"
   sensitive   = true
 }
 
@@ -348,6 +345,64 @@ variable "crm_database_name" {
 }
 
 ############################################
+# Azure SQL logical server + 5 個實體資料庫（與 Arc 無關）
+############################################
+variable "sql_server_base_name" {
+  description = "Azure SQL logical server 基底名稱；實際名稱會加上前綴與固定於 state 的亂數後綴"
+  type        = string
+  default     = "crm-sql"
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9-]+$", var.sql_server_base_name)) && length(var.sql_server_base_name) >= 1 && length(var.sql_server_base_name) <= 40
+    error_message = "sql_server_base_name 必須為 1 到 40 個英數字或連字號。"
+  }
+}
+
+variable "sql_database_names" {
+  description = "要建立的 5 個 Azure SQL Database 使用者資料庫名稱"
+  type        = list(string)
+  default     = ["CRMData", "CRMApp", "CRMArchive", "CRMReporting", "CRMStaging"]
+
+  validation {
+    condition = (
+      length(var.sql_database_names) == 5 &&
+      length(distinct([for name in var.sql_database_names : lower(name)])) == 5 &&
+      alltrue([for name in var.sql_database_names : length(trimspace(name)) > 0 && lower(trimspace(name)) != "master"])
+    )
+    error_message = "sql_database_names 必須剛好包含 5 個不重複、非空白且不可名為 master 的資料庫名稱。"
+  }
+}
+
+variable "sql_database_sku_name" {
+  description = "5 個 Azure SQL Database 的 SKU，例如 Basic、S0、GP_S_Gen5_1"
+  type        = string
+  default     = "Basic"
+}
+
+variable "sql_database_max_size_gb" {
+  description = "每個 Azure SQL Database 的最大容量（GB）；Basic 使用 2 GB"
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.sql_database_max_size_gb > 0
+    error_message = "sql_database_max_size_gb 必須大於 0。"
+  }
+}
+
+variable "sql_database_collation" {
+  description = "Azure SQL Database 定序"
+  type        = string
+  default     = "SQL_Latin1_General_CP1_CI_AS"
+}
+
+variable "sql_public_network_access_enabled" {
+  description = "是否允許 Azure SQL logical server 公開網路存取；預設關閉，僅建立資源不開放連線"
+  type        = bool
+  default     = false
+}
+
+############################################
 # Azure Arc SQL Server（CRM-DB）
 #   「Machine - Azure Arc」、「SQL Server 執行個體」與其資料庫
 #   （CRMData / master / model / msdb / tempdb）。
@@ -361,9 +416,9 @@ variable "crm_database_name" {
 #     az provider register --namespace Microsoft.AzureArcData --wait
 ############################################
 variable "create_arc_sql_resources" {
-  description = "是否以 azapi 建立 Azure Arc 機器 / SQL Server 執行個體 / 資料庫的 ARM 資源紀錄（不需真實主機）"
+  description = "是否建立 Azure Arc 資源清查紀錄；預設停用，5 個實體資料庫不依賴 Arc。"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "arc_machine_name" {

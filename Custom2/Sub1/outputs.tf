@@ -142,6 +142,21 @@ output "asr_seed_disk_id" {
   value       = try(azurerm_managed_disk.asr_seed[0].id, null)
 }
 
+output "azure_sql_databases" {
+  description = "與 Arc 無關的 Azure SQL logical server 與 5 個實體資料庫"
+  value = {
+    server_name = azurerm_mssql_server.crm_databases.name
+    server_id   = azurerm_mssql_server.crm_databases.id
+    fqdn        = azurerm_mssql_server.crm_databases.fully_qualified_domain_name
+    databases = {
+      for name, database in azurerm_mssql_database.crm_databases : name => {
+        id   = database.id
+        name = database.name
+      }
+    }
+  }
+}
+
 output "arc_sql" {
   description = "Azure Arc SQL Server 資源紀錄（azapi 建立，不需真實主機）"
   value = {
