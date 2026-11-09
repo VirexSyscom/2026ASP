@@ -27,8 +27,7 @@ network_resource_group_name   = "Spoke-Network-RG"
 create_network_resource_group = true
 
 crm_resource_group_name   = "Spoke-CRM-RG"
-# 目標 RG 已存在時必須為 false，避免 AzureRM 要求先 import 既有 RG。
-create_crm_resource_group = false
+create_crm_resource_group = true
 
 # 遷移工具層：新增資源一律放在此資源群組
 migrate_resource_group_name   = "AzureMigrateRG"
@@ -100,9 +99,11 @@ admin_username = "azureadmin"
 
 ############################################
 # 憑證
-#   請在 Azure DevOps Pipeline 以 secret 變數注入，不要把密碼寫進此檔：
+#   未指定時由 random_password 產生 24 碼高強度亂數，並固定於 Terraform state。
+#   如需自行指定，請由 Azure DevOps secret 變數覆寫，勿寫入 Git：
 #     TF_VAR_admin_password
 #     TF_VAR_sql_administrator_password
+#   無法使用亂數時，可改用 Syscom2026 的合規變種（至少 12 碼）。
 ############################################
 # admin_password             = "<由 TF_VAR_admin_password 覆寫>"
 # sql_administrator_password = "<由 TF_VAR_sql_administrator_password 覆寫>"
@@ -133,22 +134,23 @@ mi_license_type       = "LicenseIncluded"
 crm_database_name     = "CRMData"
 
 ############################################
-# Azure SQL logical server + 5 個實體資料庫（與 Arc 無關）
+# Azure SQL logical server + 5 個 Azure SQL Database
+#   沿用 CRM RG、共用前綴、local.crm_tags 與 SQL 管理員帳密。
 ############################################
-sql_server_base_name              = "crm-sql"
-sql_database_names                = ["CRMData", "CRMApp", "CRMArchive", "CRMReporting", "CRMStaging"]
-sql_database_sku_name             = "Basic"
-sql_database_max_size_gb          = 2
-sql_database_collation            = "SQL_Latin1_General_CP1_CI_AS"
-sql_public_network_access_enabled = false
+sql_server_base_name                     = "crm-sql"
+sql_database_names                       = ["CRMData", "CRMApp", "CRMArchive", "CRMReporting", "CRMStaging"]
+sql_database_sku_name                    = "Basic"
+sql_database_max_size_gb                 = 2
+sql_database_collation                   = "SQL_Latin1_General_CP1_CI_AS"
+sql_server_public_network_access_enabled = false
 
 ############################################
 # Azure Arc SQL Server
-#   本修正版預設 false：5 個實體資料庫改由 azurerm_mssql_database 建立，
-#   不再依賴 Microsoft.HybridCompute / Microsoft.AzureArcData。
-#   只有改回 true 時才需先註冊這兩個 Resource Provider。
+#   true = 以 azapi 建立 Arc 機器 / SQL Server 執行個體 / 5 個資料庫的資源紀錄，
+#          不需真實主機連線；顯示的版本與狀態皆為下方靜態值。
+#   部署前請先註冊 Microsoft.HybridCompute 與 Microsoft.AzureArcData。
 ############################################
-create_arc_sql_resources = false
+create_arc_sql_resources = true
 arc_machine_name         = "CRM-DB"
 arc_sql_edition          = "Standard"
 arc_sql_version          = "SQL Server 2022"

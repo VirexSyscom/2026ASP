@@ -1,6 +1,6 @@
 ############################################
 # main.tf
-#   Spoke 網路 + CRM 工作負載 + 遷移工具層（AzureMigrateRG）+ ADF-RG
+#   Spoke 網路 + CRM 工作負載（含 Azure SQL）+ 遷移工具層（AzureMigrateRG）+ ADF-RG
 #
 #   統一格式：
 #     1. 命名一律經由 local.name 統一表，套用 local.prefix 前綴
@@ -12,11 +12,12 @@
 #     4. 每個 RG 皆支援 create_<層>_resource_group 切換「新建 / 沿用既有」
 #     5. CRM、ADF 的子網路一律沿用 Spoke 網路 RG 內的 Spoke-VNET
 #
-#   入口網站資源與本檔對應（49 筆）：
+#   整合後資源：以原始主檔為基礎，另納入 Azure SQL logical server 與 5 個資料庫。
 #     Spoke-Network-RG (9)   nat-pip / Delete Security Rule (NSG) / Spoke-VNET /
 #                            VirtualCluster* / rt-mssqlservermi / AP-Subnet-NSG /
 #                            nsg-mssqlservermi / test-NSG / SpokeCRMNatGW
-#     Spoke-CRM-RG (23)      Compute Gallery 與映像 / SQL 受控執行個體與受控資料庫 /
+#     Spoke-CRM-RG           Compute Gallery 與映像 / SQL 受控執行個體與受控資料庫 /
+#                            Azure SQL logical server 與 5 個資料庫 /
 #                            Arc 機器與 SQL Server 執行個體及資料庫 / NIC / 磁碟 /
 #                            VM / 負載平衡器 / 警示規則 / 受控識別
 #     AzureMigrateRG (4)     RSV / Azure Migrate / Key Vault / 儲存體
@@ -70,7 +71,7 @@ locals {
     asr_seed_disk    = "${local.prefix}${var.asr_seed_disk_name}"
     managed_instance = "${local.prefix_compact}${var.mi_name}${random_string.mi_suffix.result}"
     managed_database = "${local.prefix}${var.crm_database_name}"
-    sql_server       = substr(lower("${local.prefix}${var.sql_server_base_name}-${random_string.sql_server_suffix.result}"), 0, 63)
+    azure_sql_server = substr(lower("${local.prefix}${var.sql_server_base_name}-${random_string.sql_server_suffix.result}"), 0, 63)
     arc_machine      = "${local.prefix}${var.arc_machine_name}"
     arc_sql_instance = "${local.prefix}${var.arc_machine_name}"
     alert_cpu        = "${local.prefix}Percentage CPU more ${var.cpu_alert_threshold}"
@@ -148,11 +149,40 @@ locals {
 
   # 映像版本的來源 VM（取 var.vms 的 crm）
   image_source_vm_key = "crm"
+
+  # 未由 TF_VAR_* 或 tfvars 指定時，優先採用寫入 state 後固定的 Random 密碼。
+  effective_admin_password             = var.admin_password != null ? var.admin_password : random_password.admin[0].result
+  effective_sql_administrator_password = var.sql_administrator_password != null ? var.sql_administrator_password : random_password.sql_administrator[0].result
 }
 
 ############################################
 # 全域唯一名稱用亂數後綴
 ############################################
+# VM 與 SQL 密碼：未傳入自訂密碼時產生高強度亂數，結果寫入 Terraform state 後固定。
+resource "random_password" "admin" {
+  count = var.admin_password == null ? 1 : 0
+
+  length           = 24
+  special          = true
+  override_special = "!@#%"
+  min_upper        = 2
+  min_lower        = 2
+  min_numeric      = 2
+  min_special      = 2
+}
+
+resource "random_password" "sql_administrator" {
+  count = var.sql_administrator_password == null ? 1 : 0
+
+  length           = 24
+  special          = true
+  override_special = "!@#%"
+  min_upper        = 2
+  min_lower        = 2
+  min_numeric      = 2
+  min_special      = 2
+}
+
 # SQL 受控執行個體（DNS 名稱需全域唯一）
 resource "random_string" "mi_suffix" {
   length  = 4
@@ -171,8 +201,9 @@ resource "random_string" "sql_server_suffix" {
   special = false
 
   keepers = {
-    resource_group = local.crm_rg_name
+    resource_group = local.crm_rg_id
     base_name      = var.sql_server_base_name
+    prefix         = local.prefix
   }
 }
 
@@ -711,7 +742,7 @@ resource "azurerm_windows_virtual_machine" "crm" {
   resource_group_name   = local.crm_rg_name
   size                  = var.vm_size
   admin_username        = var.admin_username
-  admin_password        = var.admin_password
+  admin_password        = local.effective_admin_password
   network_interface_ids = [azurerm_network_interface.crm[each.key].id]
 
   tags = merge(local.crm_tags, {
@@ -859,7 +890,7 @@ resource "azurerm_mssql_managed_instance" "crm" {
   subnet_id           = azurerm_subnet.mi.id
 
   administrator_login          = var.sql_administrator_login
-  administrator_login_password = var.sql_administrator_password
+  administrator_login_password = local.effective_sql_administrator_password
 
   license_type                 = var.mi_license_type
   sku_name                     = var.mi_sku_name
@@ -885,31 +916,37 @@ resource "azurerm_mssql_managed_database" "crm" {
 }
 
 ############################################
-# 【CRM】Azure SQL logical server + 5 個實體資料庫
-#   與 Azure Arc 完全無關；資料庫會真正建立在 Azure SQL Database。
-#   不使用 master/model/msdb/tempdb：這些是系統資料庫名稱，不應被當成
-#   5 個可獨立建立與管理的使用者資料庫資源。
+# 【CRM】Azure SQL logical server + 5 個 Azure SQL Database
+#   由第二組設定整合而來；命名、前綴與標籤均改用本主檔規則。
+#   logical server 名稱使用 local.name 與固定於 state 的亂數後綴。
 ############################################
-resource "azurerm_mssql_server" "crm_databases" {
-  name                         = local.name.sql_server
-  resource_group_name          = local.crm_rg_name
-  location                     = local.crm_rg_location
-  version                      = "12.0"
-  administrator_login          = var.sql_administrator_login
-  administrator_login_password = var.sql_administrator_password
-  minimum_tls_version          = "1.2"
-  public_network_access_enabled = var.sql_public_network_access_enabled
+resource "azurerm_mssql_server" "crm" {
+  name                          = local.name.azure_sql_server
+  resource_group_name           = local.crm_rg_name
+  location                      = local.crm_rg_location
+  version                       = "12.0"
+  administrator_login           = var.sql_administrator_login
+  administrator_login_password  = local.effective_sql_administrator_password
+  minimum_tls_version           = "1.2"
+  public_network_access_enabled = var.sql_server_public_network_access_enabled
 
   tags = merge(local.crm_tags, {
     ResourceType = "AzureSqlLogicalServer"
   })
+
+  lifecycle {
+    precondition {
+      condition     = can(regex("^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$", local.name.azure_sql_server))
+      error_message = "Azure SQL logical server 最終名稱必須為 2 到 63 個小寫英數字或連字號，且不得以連字號開頭或結尾。"
+    }
+  }
 }
 
-resource "azurerm_mssql_database" "crm_databases" {
+resource "azurerm_mssql_database" "crm" {
   for_each = toset(var.sql_database_names)
 
   name           = each.value
-  server_id      = azurerm_mssql_server.crm_databases.id
+  server_id      = azurerm_mssql_server.crm.id
   collation      = var.sql_database_collation
   sku_name       = var.sql_database_sku_name
   max_size_gb    = var.sql_database_max_size_gb
@@ -919,6 +956,13 @@ resource "azurerm_mssql_database" "crm_databases" {
     ResourceType = "AzureSqlDatabase"
     DatabaseName = each.value
   })
+
+  lifecycle {
+    precondition {
+      condition     = length(var.sql_database_names) == 5
+      error_message = "必須建立剛好 5 個 Azure SQL Database。"
+    }
+  }
 }
 
 ############################################

@@ -228,9 +228,11 @@ variable "vm_size" {
 
 ############################################
 # 憑證
-#   密碼請由 Azure DevOps 的 secret 變數注入；不要提交到 Git：
+#   預設為 null，由 random_password 產生高強度亂數並固定於 Terraform state。
+#   若需自行指定（例如相容既有系統），可透過 Azure DevOps secret 變數覆寫：
 #     TF_VAR_admin_password
 #     TF_VAR_sql_administrator_password
+#   無法使用亂數時，可使用符合原需求的 Syscom2026 變種，但不建議寫入版本控制。
 ############################################
 variable "admin_username" {
   description = "VM 本機管理員帳號"
@@ -239,9 +241,16 @@ variable "admin_username" {
 }
 
 variable "admin_password" {
-  description = "VM 本機管理員密碼；請以 Azure DevOps secret 變數 TF_VAR_admin_password 注入。"
+  description = "VM 本機管理員密碼。null 時由 random_password 自動產生；也可用 TF_VAR_admin_password 覆寫。"
   type        = string
+  default     = null
+  nullable    = true
   sensitive   = true
+
+  validation {
+    condition     = var.admin_password == null ? true : length(var.admin_password) >= 12
+    error_message = "admin_password 若有指定，長度至少須為 12 個字元。"
+  }
 }
 
 variable "sql_administrator_login" {
@@ -251,9 +260,16 @@ variable "sql_administrator_login" {
 }
 
 variable "sql_administrator_password" {
-  description = "SQL 管理員密碼；請以 Azure DevOps secret 變數 TF_VAR_sql_administrator_password 注入。"
+  description = "SQL 管理員密碼（受控執行個體與 logical server 共用）。null 時由 random_password 自動產生；也可用 TF_VAR_sql_administrator_password 覆寫。"
   type        = string
+  default     = null
+  nullable    = true
   sensitive   = true
+
+  validation {
+    condition     = var.sql_administrator_password == null ? true : length(var.sql_administrator_password) >= 12
+    error_message = "sql_administrator_password 若有指定，長度至少須為 12 個字元。"
+  }
 }
 
 ############################################
@@ -345,10 +361,10 @@ variable "crm_database_name" {
 }
 
 ############################################
-# Azure SQL logical server + 5 個實體資料庫（與 Arc 無關）
+# Azure SQL logical server + Azure SQL Database
 ############################################
 variable "sql_server_base_name" {
-  description = "Azure SQL logical server 基底名稱；實際名稱會加上前綴與固定於 state 的亂數後綴"
+  description = "Azure SQL logical server 基底名稱；實際名稱會套用共用前綴與固定於 state 的亂數後綴。"
   type        = string
   default     = "crm-sql"
 
@@ -359,7 +375,7 @@ variable "sql_server_base_name" {
 }
 
 variable "sql_database_names" {
-  description = "要建立的 5 個 Azure SQL Database 使用者資料庫名稱"
+  description = "要建立的 5 個 Azure SQL Database 使用者資料庫名稱；資料庫名稱不加前綴。"
   type        = list(string)
   default     = ["CRMData", "CRMApp", "CRMArchive", "CRMReporting", "CRMStaging"]
 
@@ -374,13 +390,13 @@ variable "sql_database_names" {
 }
 
 variable "sql_database_sku_name" {
-  description = "5 個 Azure SQL Database 的 SKU，例如 Basic、S0、GP_S_Gen5_1"
+  description = "Azure SQL Database SKU"
   type        = string
   default     = "Basic"
 }
 
 variable "sql_database_max_size_gb" {
-  description = "每個 Azure SQL Database 的最大容量（GB）；Basic 使用 2 GB"
+  description = "每個 Azure SQL Database 的最大容量（GB）；Basic 預設使用 2 GB。"
   type        = number
   default     = 2
 
@@ -396,8 +412,8 @@ variable "sql_database_collation" {
   default     = "SQL_Latin1_General_CP1_CI_AS"
 }
 
-variable "sql_public_network_access_enabled" {
-  description = "是否允許 Azure SQL logical server 公開網路存取；預設關閉，僅建立資源不開放連線"
+variable "sql_server_public_network_access_enabled" {
+  description = "是否允許 Azure SQL logical server 公開網路存取；預設關閉。"
   type        = bool
   default     = false
 }
@@ -416,9 +432,9 @@ variable "sql_public_network_access_enabled" {
 #     az provider register --namespace Microsoft.AzureArcData --wait
 ############################################
 variable "create_arc_sql_resources" {
-  description = "是否建立 Azure Arc 資源清查紀錄；預設停用，5 個實體資料庫不依賴 Arc。"
+  description = "是否以 azapi 建立 Azure Arc 機器 / SQL Server 執行個體 / 資料庫的 ARM 資源紀錄（不需真實主機）"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "arc_machine_name" {

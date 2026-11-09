@@ -137,24 +137,37 @@ output "sql_managed_instance" {
   }
 }
 
-output "asr_seed_disk_id" {
-  description = "ASR 種子磁碟資源 ID"
-  value       = try(azurerm_managed_disk.asr_seed[0].id, null)
+output "azure_sql_server" {
+  description = "Azure SQL logical server"
+  value = {
+    id   = azurerm_mssql_server.crm.id
+    name = azurerm_mssql_server.crm.name
+    fqdn = azurerm_mssql_server.crm.fully_qualified_domain_name
+  }
 }
 
 output "azure_sql_databases" {
-  description = "與 Arc 無關的 Azure SQL logical server 與 5 個實體資料庫"
+  description = "建立完成的 5 個 Azure SQL Database"
   value = {
-    server_name = azurerm_mssql_server.crm_databases.name
-    server_id   = azurerm_mssql_server.crm_databases.id
-    fqdn        = azurerm_mssql_server.crm_databases.fully_qualified_domain_name
-    databases = {
-      for name, database in azurerm_mssql_database.crm_databases : name => {
-        id   = database.id
-        name = database.name
-      }
+    for name, database in azurerm_mssql_database.crm : name => {
+      id   = database.id
+      name = database.name
     }
   }
+}
+
+output "generated_credentials" {
+  description = "實際使用的 VM 與 SQL 密碼；輸出標記為 sensitive。請用 terraform output -json generated_credentials 安全擷取。"
+  value = {
+    vm_admin_password  = local.effective_admin_password
+    sql_admin_password = local.effective_sql_administrator_password
+  }
+  sensitive = true
+}
+
+output "asr_seed_disk_id" {
+  description = "ASR 種子磁碟資源 ID"
+  value       = try(azurerm_managed_disk.asr_seed[0].id, null)
 }
 
 output "arc_sql" {
