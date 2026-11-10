@@ -3,7 +3,7 @@
 #   四個資源群組全部統一為同一套變數命名規則：
 #     <層>_resource_group_name / create_<層>_resource_group / <層>_tags
 #       network ：Spoke 網路（Spoke-VNET、NSG、NAT Gateway、路由表）
-#       crm     ：Spoke-CRM-RG（VM、SQL 受控執行個體、Compute Gallery、監控）
+#       crm     ：Spoke-CRM-RG（VM、SQL MI / Arc SQL、Compute Gallery、監控）
 #       migrate ：AzureMigrateRG 遷移工具層
 #       adf     ：ADF-RG（Data Factory、Private Endpoint、Key Vault、儲存體）
 ############################################
@@ -361,64 +361,6 @@ variable "crm_database_name" {
 }
 
 ############################################
-# Azure SQL logical server + Azure SQL Database
-############################################
-variable "sql_server_base_name" {
-  description = "Azure SQL logical server 基底名稱；實際名稱會套用共用前綴與固定於 state 的亂數後綴。"
-  type        = string
-  default     = "crm-sql"
-
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9-]+$", var.sql_server_base_name)) && length(var.sql_server_base_name) >= 1 && length(var.sql_server_base_name) <= 40
-    error_message = "sql_server_base_name 必須為 1 到 40 個英數字或連字號。"
-  }
-}
-
-variable "sql_database_names" {
-  description = "要建立的 5 個 Azure SQL Database 使用者資料庫名稱；資料庫名稱不加前綴。"
-  type        = list(string)
-  default     = ["CRMData", "CRMApp", "CRMArchive", "CRMReporting", "CRMStaging"]
-
-  validation {
-    condition = (
-      length(var.sql_database_names) == 5 &&
-      length(distinct([for name in var.sql_database_names : lower(name)])) == 5 &&
-      alltrue([for name in var.sql_database_names : length(trimspace(name)) > 0 && lower(trimspace(name)) != "master"])
-    )
-    error_message = "sql_database_names 必須剛好包含 5 個不重複、非空白且不可名為 master 的資料庫名稱。"
-  }
-}
-
-variable "sql_database_sku_name" {
-  description = "Azure SQL Database SKU"
-  type        = string
-  default     = "Basic"
-}
-
-variable "sql_database_max_size_gb" {
-  description = "每個 Azure SQL Database 的最大容量（GB）；Basic 預設使用 2 GB。"
-  type        = number
-  default     = 2
-
-  validation {
-    condition     = var.sql_database_max_size_gb > 0
-    error_message = "sql_database_max_size_gb 必須大於 0。"
-  }
-}
-
-variable "sql_database_collation" {
-  description = "Azure SQL Database 定序"
-  type        = string
-  default     = "SQL_Latin1_General_CP1_CI_AS"
-}
-
-variable "sql_server_public_network_access_enabled" {
-  description = "是否允許 Azure SQL logical server 公開網路存取；預設關閉。"
-  type        = bool
-  default     = false
-}
-
-############################################
 # Azure Arc SQL Server（CRM-DB）
 #   「Machine - Azure Arc」、「SQL Server 執行個體」與其資料庫
 #   （CRMData / master / model / msdb / tempdb）。
@@ -472,9 +414,20 @@ variable "arc_sql_status" {
 }
 
 variable "arc_sql_database_names" {
-  description = "Arc SQL Server 執行個體下的資料庫名稱（資料庫名稱對應實際資料庫，不加前綴）"
+  description = "Arc SQL Server 執行個體下的資料庫名稱；固定對齊來源環境的 CRMData / master / model / msdb / tempdb。"
   type        = set(string)
   default     = ["CRMData", "master", "model", "msdb", "tempdb"]
+
+  validation {
+    condition = (
+      length(var.arc_sql_database_names) == 5 &&
+      alltrue([
+        for required_name in ["CRMData", "master", "model", "msdb", "tempdb"] :
+        contains(var.arc_sql_database_names, required_name)
+      ])
+    )
+    error_message = "arc_sql_database_names 必須正好包含 CRMData、master、model、msdb、tempdb。"
+  }
 }
 
 ############################################
@@ -633,8 +586,9 @@ variable "adf_nsg_name" {
 
 ############################################
 # 監控
-#   現況沒有 Action Group；alert_action_group_id 留空時警示規則不綁定通知，
-#   指定既有 Action Group 的資源 ID 後才會寄送通知。
+#   本組態會建立 VMI-ActionGroup-crm / VMI-ActionGroup-crm02，供每台 VM 的
+#   個別可用性警示使用。新建 Action Group 預設沒有收件者，可後續加入通知管道。
+#   alert_action_group_id 僅供共用警示額外綁定既有 Action Group。
 ############################################
 variable "alert_action_group_id" {
   description = "警示規則要通知的 Action Group 資源 ID；留空則不綁定 Action Group"

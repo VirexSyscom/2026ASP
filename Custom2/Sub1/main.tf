@@ -1,6 +1,7 @@
 ############################################
 # main.tf
-#   Spoke 網路 + CRM 工作負載（含 Azure SQL）+ 遷移工具層（AzureMigrateRG）+ ADF-RG
+#   Spoke 網路 + CRM 工作負載（含 SQL Managed Instance / Arc SQL）
+#   + 遷移工具層（AzureMigrateRG）+ ADF-RG
 #
 #   統一格式：
 #     1. 命名一律經由 local.name 統一表，套用 local.prefix 前綴
@@ -12,14 +13,14 @@
 #     4. 每個 RG 皆支援 create_<層>_resource_group 切換「新建 / 沿用既有」
 #     5. CRM、ADF 的子網路一律沿用 Spoke 網路 RG 內的 Spoke-VNET
 #
-#   整合後資源：以原始主檔為基礎，另納入 Azure SQL logical server 與 5 個資料庫。
+#   整合後資源：以原始主檔為基礎，SQL Server 清單改以 Arc SQL 資源名稱
+#   對齊來源環境；不再建立無法與來源清單對應的 Azure SQL logical server。
 #     Spoke-Network-RG (9)   nat-pip / Delete Security Rule (NSG) / Spoke-VNET /
 #                            VirtualCluster* / rt-mssqlservermi / AP-Subnet-NSG /
 #                            nsg-mssqlservermi / test-NSG / SpokeCRMNatGW
 #     Spoke-CRM-RG           Compute Gallery 與映像 / SQL 受控執行個體與受控資料庫 /
-#                            Azure SQL logical server 與 5 個資料庫 /
 #                            Arc 機器與 SQL Server 執行個體及資料庫 / NIC / 磁碟 /
-#                            VM / 負載平衡器 / 警示規則 / 受控識別
+#                            VM / 負載平衡器 / 警示規則 / Action Group / 受控識別
 #     AzureMigrateRG (4)     RSV / Azure Migrate / Key Vault / 儲存體
 #     ADF-RG (13)            私人 DNS 區域 / Private Endpoint(+NIC) / Key Vault /
 #                            Data Factory / NSG / 儲存體
@@ -71,11 +72,11 @@ locals {
     asr_seed_disk    = "${local.prefix}${var.asr_seed_disk_name}"
     managed_instance = "${local.prefix_compact}${var.mi_name}${random_string.mi_suffix.result}"
     managed_database = "${local.prefix}${var.crm_database_name}"
-    azure_sql_server = substr(lower("${local.prefix}${var.sql_server_base_name}-${random_string.sql_server_suffix.result}"), 0, 63)
     arc_machine      = "${local.prefix}${var.arc_machine_name}"
     arc_sql_instance = "${local.prefix}${var.arc_machine_name}"
     alert_cpu        = "${local.prefix}Percentage CPU more ${var.cpu_alert_threshold}"
     alert_vm_avail   = "${local.prefix}VM Availability"
+    alert_crm_db_cpu = "${local.prefix}CRM-DB CPU"
 
     # ===== 遷移工具層（AzureMigrateRG）=====
     # 對應入口網站清單：
@@ -191,19 +192,6 @@ resource "random_string" "mi_suffix" {
 
   keepers = {
     prefix = local.prefix
-  }
-}
-
-# Azure SQL logical server（DNS 名稱需全域唯一）
-resource "random_string" "sql_server_suffix" {
-  length  = 8
-  upper   = false
-  special = false
-
-  keepers = {
-    resource_group = local.crm_rg_id
-    base_name      = var.sql_server_base_name
-    prefix         = local.prefix
   }
 }
 
@@ -916,56 +904,6 @@ resource "azurerm_mssql_managed_database" "crm" {
 }
 
 ############################################
-# 【CRM】Azure SQL logical server + 5 個 Azure SQL Database
-#   由第二組設定整合而來；命名、前綴與標籤均改用本主檔規則。
-#   logical server 名稱使用 local.name 與固定於 state 的亂數後綴。
-############################################
-resource "azurerm_mssql_server" "crm" {
-  name                          = local.name.azure_sql_server
-  resource_group_name           = local.crm_rg_name
-  location                      = local.crm_rg_location
-  version                       = "12.0"
-  administrator_login           = var.sql_administrator_login
-  administrator_login_password  = local.effective_sql_administrator_password
-  minimum_tls_version           = "1.2"
-  public_network_access_enabled = var.sql_server_public_network_access_enabled
-
-  tags = merge(local.crm_tags, {
-    ResourceType = "AzureSqlLogicalServer"
-  })
-
-  lifecycle {
-    precondition {
-      condition     = can(regex("^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$", local.name.azure_sql_server))
-      error_message = "Azure SQL logical server 最終名稱必須為 2 到 63 個小寫英數字或連字號，且不得以連字號開頭或結尾。"
-    }
-  }
-}
-
-resource "azurerm_mssql_database" "crm" {
-  for_each = toset(var.sql_database_names)
-
-  name           = each.value
-  server_id      = azurerm_mssql_server.crm.id
-  collation      = var.sql_database_collation
-  sku_name       = var.sql_database_sku_name
-  max_size_gb    = var.sql_database_max_size_gb
-  zone_redundant = false
-
-  tags = merge(local.crm_tags, {
-    ResourceType = "AzureSqlDatabase"
-    DatabaseName = each.value
-  })
-
-  lifecycle {
-    precondition {
-      condition     = length(var.sql_database_names) == 5
-      error_message = "必須建立剛好 5 個 Azure SQL Database。"
-    }
-  }
-}
-
-############################################
 # 【CRM】Azure Arc SQL Server（不需真實主機連線）
 #   對應入口網站：
 #     CRM-DB（Machine - Azure Arc）
@@ -1041,16 +979,21 @@ resource "azapi_resource" "arc_sql_instance" {
   schema_validation_enabled = false
 }
 
-# 5 個 SQL Server 資料庫（CRMData + 4 個系統資料庫）
-# 清單與屬性直接定義於此，不再依賴 var.arc_sql_database_names，
-# 避免變數值缺漏或被覆蓋而導致資料庫沒有被建立。
+# 5 個 SQL Server 資料庫（CRMData + 4 個系統資料庫）。
+# 名稱由 arc_sql_database_names 明確指定，對齊來源環境：
+# CRMData / master / model / msdb / tempdb。
 locals {
-  arc_sql_databases = {
+  arc_sql_database_profiles = {
     CRMData = { recovery_mode = "Full", size_mb = 1024, space_available_mb = 512 }
     master  = { recovery_mode = "Simple", size_mb = 8, space_available_mb = 2 }
     model   = { recovery_mode = "Full", size_mb = 16, space_available_mb = 4 }
     msdb    = { recovery_mode = "Simple", size_mb = 32, space_available_mb = 8 }
     tempdb  = { recovery_mode = "Simple", size_mb = 16, space_available_mb = 8 }
+  }
+
+  arc_sql_databases = {
+    for database_name in var.arc_sql_database_names :
+    database_name => local.arc_sql_database_profiles[database_name]
   }
 }
 
@@ -1085,10 +1028,61 @@ resource "azapi_resource" "arc_sql_database" {
 
 ############################################
 # 【CRM】監控
-#   對應入口網站：Percentage CPU more 1 / VM Availability
-#   兩條警示皆為多資源警示，涵蓋 var.vms 內所有 VM。
-#   alert_action_group_id 留空時不綁定通知。
+#   對應入口網站：CRM-DB CPU / Percentage CPU more 1 / VM Availability /
+#                 VM Availability - crm / VM Availability - crm02 /
+#                 VMI-ActionGroup-crm / VMI-ActionGroup-crm02
+#   每台 VM 都有獨立 Action Group 與可用性警示；Action Group 預設不含
+#   收件者，可於 Azure Portal 或後續 Terraform 變更加入通知管道。
+#   alert_action_group_id 只供既有兩條共用警示選擇性綁定外部 Action Group。
 ############################################
+resource "azurerm_monitor_action_group" "vm" {
+  for_each = var.vms
+
+  name                = "${local.prefix}VMI-ActionGroup-${lower(each.value.name)}"
+  resource_group_name = local.crm_rg_name
+  short_name          = substr("vmi-${lower(each.key)}", 0, 12)
+  enabled             = true
+
+  tags = merge(local.crm_tags, {
+    ResourceType = "ActionGroup"
+    VirtualMachine = each.value.name
+  })
+}
+
+resource "azurerm_monitor_metric_alert" "crm_db_cpu" {
+  name                     = local.name.alert_crm_db_cpu
+  resource_group_name      = local.crm_rg_name
+  scopes                   = [azurerm_mssql_managed_instance.crm.id]
+  target_resource_type     = "Microsoft.Sql/managedInstances"
+  target_resource_location = local.crm_rg_location
+  severity                 = 2
+  frequency                = "PT5M"
+  window_size              = "PT15M"
+  enabled                  = true
+  auto_mitigate            = true
+
+  tags = merge(local.crm_tags, {
+    ResourceType = "MetricAlert"
+    Purpose      = "Database-Performance-Monitoring"
+  })
+
+  criteria {
+    metric_namespace = "Microsoft.Sql/managedInstances"
+    metric_name      = "avg_cpu_percent"
+    aggregation      = "Average"
+    operator         = "GreaterThan"
+    threshold        = var.cpu_alert_threshold
+  }
+
+  dynamic "action" {
+    for_each = azurerm_monitor_action_group.vm
+
+    content {
+      action_group_id = action.value.id
+    }
+  }
+}
+
 resource "azurerm_monitor_metric_alert" "cpu" {
   name                     = local.name.alert_cpu
   resource_group_name      = local.crm_rg_name
@@ -1150,6 +1144,39 @@ resource "azurerm_monitor_metric_alert" "vm_availability" {
     content {
       action_group_id = action.value
     }
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "vm_availability_individual" {
+  for_each = var.vms
+
+  name                     = "${local.prefix}VM Availability - ${lower(each.value.name)}"
+  resource_group_name      = local.crm_rg_name
+  scopes                   = [azurerm_windows_virtual_machine.crm[each.key].id]
+  target_resource_type     = "Microsoft.Compute/virtualMachines"
+  target_resource_location = local.crm_rg_location
+  severity                 = 1
+  frequency                = "PT1M"
+  window_size              = "PT5M"
+  enabled                  = true
+  auto_mitigate            = true
+
+  tags = merge(local.crm_tags, {
+    ResourceType   = "MetricAlert"
+    Purpose        = "Availability-Monitoring"
+    VirtualMachine = each.value.name
+  })
+
+  criteria {
+    metric_namespace = "Microsoft.Compute/virtualMachines"
+    metric_name      = "VmAvailabilityMetric"
+    aggregation      = "Average"
+    operator         = "LessThan"
+    threshold        = 1
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.vm[each.key].id
   }
 }
 

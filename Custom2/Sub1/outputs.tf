@@ -137,25 +137,6 @@ output "sql_managed_instance" {
   }
 }
 
-output "azure_sql_server" {
-  description = "Azure SQL logical server"
-  value = {
-    id   = azurerm_mssql_server.crm.id
-    name = azurerm_mssql_server.crm.name
-    fqdn = azurerm_mssql_server.crm.fully_qualified_domain_name
-  }
-}
-
-output "azure_sql_databases" {
-  description = "建立完成的 5 個 Azure SQL Database"
-  value = {
-    for name, database in azurerm_mssql_database.crm : name => {
-      id   = database.id
-      name = database.name
-    }
-  }
-}
-
 output "generated_credentials" {
   description = "實際使用的 VM 與 SQL 密碼；輸出標記為 sensitive。請用 terraform output -json generated_credentials 安全擷取。"
   value = {
@@ -183,9 +164,12 @@ output "arc_sql" {
 output "monitoring" {
   description = "CRM 監控資源"
   value = {
-    cpu_alert_id             = azurerm_monitor_metric_alert.cpu.id
-    vm_availability_alert_id = azurerm_monitor_metric_alert.vm_availability.id
-    nsg_rule_delete_alert_id = azurerm_monitor_activity_log_alert.nsg_rule_delete.id
+    crm_db_cpu_alert_id               = azurerm_monitor_metric_alert.crm_db_cpu.id
+    cpu_alert_id                      = azurerm_monitor_metric_alert.cpu.id
+    vm_availability_alert_id          = azurerm_monitor_metric_alert.vm_availability.id
+    vm_availability_individual_ids    = { for k, alert in azurerm_monitor_metric_alert.vm_availability_individual : k => alert.id }
+    vm_availability_action_group_ids  = { for k, group in azurerm_monitor_action_group.vm : k => group.id }
+    nsg_rule_delete_alert_id          = azurerm_monitor_activity_log_alert.nsg_rule_delete.id
   }
 }
 

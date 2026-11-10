@@ -134,17 +134,6 @@ mi_license_type       = "LicenseIncluded"
 crm_database_name     = "CRMData"
 
 ############################################
-# Azure SQL logical server + 5 個 Azure SQL Database
-#   沿用 CRM RG、共用前綴、local.crm_tags 與 SQL 管理員帳密。
-############################################
-sql_server_base_name                     = "crm-sql"
-sql_database_names                       = ["CRMData", "CRMApp", "CRMArchive", "CRMReporting", "CRMStaging"]
-sql_database_sku_name                    = "Basic"
-sql_database_max_size_gb                 = 2
-sql_database_collation                   = "SQL_Latin1_General_CP1_CI_AS"
-sql_server_public_network_access_enabled = false
-
-############################################
 # Azure Arc SQL Server
 #   true = 以 azapi 建立 Arc 機器 / SQL Server 執行個體 / 5 個資料庫的資源紀錄，
 #          不需真實主機連線；顯示的版本與狀態皆為下方靜態值。
@@ -199,7 +188,8 @@ adf_nsg_name = "ADF-NSF"
 
 ############################################
 # 監控
-#   現況沒有 Action Group；指定既有 Action Group 的資源 ID 後才會寄送通知
+#   會建立 VMI-ActionGroup-crm / VMI-ActionGroup-crm02；預設不含收件者。
+#   alert_action_group_id 可讓共用警示額外綁定既有 Action Group。
 #   cpu_alert_threshold = 1 對應入口網站現有警示「Percentage CPU more 1」
 ############################################
 alert_action_group_id = ""
