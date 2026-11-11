@@ -44,9 +44,9 @@ variable "mi_subnet_prefix" {
 }
 
 variable "mi_name" {
-  description = "SQL Managed Instance 名稱；預設刻意固定為圖片中的 mssqlservermi。此名稱須全域唯一。"
+  description = "SQL Managed Instance 名稱，此名稱須全域唯一。"
   type        = string
-  default     = "mssqlservermi"
+  default     = "mssqlservermi221u81289"
 }
 
 variable "managed_database_names" {
