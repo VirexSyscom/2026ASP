@@ -1,0 +1,62 @@
+# Azure DevOps Pipeline：CRMData SQL Managed Instance
+# 沿用既有 ReDeployAgentPool、TerraformTask@5 與 Sub1 變數命名。
+trigger:
+- main
+
+pr:
+- main
+
+pool:
+  name: ReDeployAgentPool
+
+variables:
+  terraformWorkingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Test'
+  terraformPlanFile: '$(System.DefaultWorkingDirectory)/Custom2/Test/crmdata.tfplan'
+
+steps:
+- checkout: self
+  clean: true
+
+- task: TerraformTask@5
+  displayName: 初始化 Terraform Backend (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '$(terraformWorkingDirectory)'
+    backendAzureRmUseEntraIdForAuthentication: false
+    backendServiceArm: '$(SVCARM1)'
+    backendAzureRmOverrideSubscriptionID: '$(SubID1)'
+    backendAzureRmResourceGroupName: '$(SARG1)'
+    backendAzureRmStorageAccountName: '$(SAName1)'
+    backendAzureRmContainerName: '$(CName1)'
+    backendAzureRmKey: '$(SAKey1)'
+    commandOptions: '-input=false -lock-timeout=5m'
+
+- task: TerraformTask@5
+  displayName: 驗證 Terraform 組態 (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'validate'
+    workingDirectory: '$(terraformWorkingDirectory)'
+
+- task: TerraformTask@5
+  displayName: 建立 CRMData 資源計畫 (Sub1)
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    workingDirectory: '$(terraformWorkingDirectory)'
+    environmentServiceNameAzureRM: '$(SVCARM1)'
+    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+    commandOptions: '-input=false -lock-timeout=5m -var-file=terraform.tfvars -out=$(terraformPlanFile)'
+
+# Pull Request 只執行 init / validate / plan；只有 main 分支會套用已儲存的 plan。
+- task: TerraformTask@5
+  displayName: 建立 CRMData Azure 資源 (Sub1)
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+  inputs:
+    provider: 'azurerm'
+    command: 'apply'
+    workingDirectory: '$(terraformWorkingDirectory)'
+    environmentServiceNameAzureRM: '$(SVCARM1)'
+    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+    commandOptions: '-input=false -lock-timeout=5m $(terraformPlanFile)'
