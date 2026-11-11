@@ -17,6 +17,20 @@ steps:
 - checkout: self
   clean: true
 
+- task: AzureCLI@2
+  displayName: 註冊必要 Azure Resource Providers
+  inputs:
+    azureSubscription: '$(SVCARM1)'
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: |
+      set -euo pipefail
+      for namespace in Microsoft.Network Microsoft.Sql Microsoft.HybridCompute Microsoft.AzureArcData; do
+        az provider register --namespace "$namespace" --wait
+      done
+
+
+
 - task: TerraformTask@5
   displayName: 初始化 Terraform Backend (Sub1)
   inputs:
@@ -60,3 +74,5 @@ steps:
     environmentServiceNameAzureRM: '$(SVCARM1)'
     environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
     commandOptions: '-input=false -lock-timeout=5m $(terraformPlanFile)'
+  env:
+   TF_VAR_sql_administrator_password: '$(TF_VAR_sql_administrator_password)'
