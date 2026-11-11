@@ -3,7 +3,7 @@ location                    = "japaneast"
 crm_resource_group_name     = "Spoke-CRM-RG"
 network_resource_group_name = "Spoke-Network-RG"
 
-mi_name = "mssqlservermi"
+mi_name = "mssqlservermi221u81289"
 managed_database_names = [
   "CRMData",
   "testCRMData",
