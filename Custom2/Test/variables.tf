@@ -1,101 +1,76 @@
-############################################
-# variables.tf
-############################################
 variable "subscription_id" {
-  description = "Azure 訂閱 ID；預設由 Azure DevOps Service Connection 注入。"
+  description = "Azure 訂閱 ID；Azure DevOps 會以 ARM_SUBSCRIPTION_ID 注入，通常可保持 null。"
   type        = string
   default     = null
   nullable    = true
 }
 
 variable "location" {
-  description = "Azure 部署區域。"
+  description = "Azure 區域。圖片中的位置為 Japan East。"
   type        = string
   default     = "japaneast"
 }
 
-variable "name_prefix" {
-  description = "資源名稱前綴；僅可使用小寫英數字，最多 8 碼。"
-  type        = string
-  default     = "demo"
-
-  validation {
-    condition     = can(regex("^[a-z0-9]{0,8}$", var.name_prefix))
-    error_message = "name_prefix 只能使用小寫英文字母與數字，且最多 8 碼。"
-  }
-}
-
-variable "network_resource_group_name" {
-  description = "SQL Managed Instance 網路資源群組名稱。"
-  type        = string
-  default     = "Spoke-Network-RG"
-}
-
-variable "create_network_resource_group" {
-  description = "true 建立網路資源群組；false 沿用同名既有資源群組。"
-  type        = bool
-  default     = true
-}
-
 variable "crm_resource_group_name" {
-  description = "SQL Managed Instance 工作負載資源群組名稱。"
+  description = "圖片中的目標資源群組。"
   type        = string
   default     = "Spoke-CRM-RG"
 }
 
-variable "create_crm_resource_group" {
-  description = "true 建立 CRM 資源群組；false 沿用同名既有資源群組。"
-  type        = bool
-  default     = true
+variable "network_resource_group_name" {
+  description = "SQL Managed Instance 必要網路資源所在的輔助資源群組。"
+  type        = string
+  default     = "Spoke-Network-RG"
 }
 
 variable "vnet_name" {
-  description = "虛擬網路基底名稱。"
-  type        = string
-  default     = "Spoke-VNET"
-}
-
-variable "mi_subnet_name" {
-  description = "SQL Managed Instance 專用子網路基底名稱。"
-  type        = string
-  default     = "MI-Subnet"
+  type    = string
+  default = "Spoke-VNET"
 }
 
 variable "vnet_address_space" {
-  description = "虛擬網路位址空間。"
-  type        = list(string)
-  default     = ["10.10.0.0/16"]
+  type    = list(string)
+  default = ["10.10.0.0/16"]
+}
+
+variable "mi_subnet_name" {
+  type    = string
+  default = "MI-Subnet"
 }
 
 variable "mi_subnet_prefix" {
-  description = "SQL Managed Instance 專用子網路；部署後不應任意縮小。"
-  type        = string
-  default     = "10.10.2.0/24"
+  type    = string
+  default = "10.10.2.0/24"
 }
 
-variable "managed_instance_name_base" {
-  description = "SQL Managed Instance DNS 名稱基底；Terraform 會加上前綴與 6 碼亂數以確保全域唯一。"
+variable "mi_name" {
+  description = "SQL Managed Instance 名稱；預設刻意固定為圖片中的 mssqlservermi。此名稱須全域唯一。"
   type        = string
-  default     = "crmdata-mi"
+  default     = "mssqlservermi"
+}
+
+variable "managed_database_names" {
+  description = "圖片中的兩個受控資料庫，不得遺漏。"
+  type        = set(string)
+  default     = ["CRMData", "testCRMData"]
 
   validation {
     condition = (
-      length(var.managed_instance_name_base) >= 1 &&
-      length(var.managed_instance_name_base) <= 48 &&
-      can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.managed_instance_name_base))
+      length(var.managed_database_names) == 2 &&
+      contains(var.managed_database_names, "CRMData") &&
+      contains(var.managed_database_names, "testCRMData")
     )
-    error_message = "managed_instance_name_base 必須為 1-48 碼小寫英數字或連字號，且首尾不可為連字號。"
+    error_message = "managed_database_names 必須正好包含 CRMData 與 testCRMData。"
   }
 }
 
 variable "sql_administrator_login" {
-  description = "SQL Managed Instance 管理者登入名稱。"
-  type        = string
-  default     = "crmadminuser"
+  type    = string
+  default = "sqladminuser"
 }
 
 variable "sql_administrator_password" {
-  description = "SQL 管理者密碼。null 時由 Terraform 產生 24 碼密碼並保存於遠端 state；也可用 TF_VAR_sql_administrator_password 覆寫。"
+  description = "可由 Azure DevOps secret TF_VAR_sql_administrator_password 覆寫；null 時自動產生。"
   type        = string
   default     = null
   nullable    = true
@@ -103,68 +78,69 @@ variable "sql_administrator_password" {
 }
 
 variable "mi_sku_name" {
-  description = "SQL Managed Instance SKU。"
-  type        = string
-  default     = "GP_Gen5"
+  type    = string
+  default = "GP_Gen5"
 }
 
 variable "mi_vcores" {
-  description = "SQL Managed Instance vCore 數。"
-  type        = number
-  default     = 4
-
-  validation {
-    condition     = contains([4, 8, 16, 24, 32, 40, 64, 80], var.mi_vcores)
-    error_message = "mi_vcores 必須為 4、8、16、24、32、40、64 或 80。"
-  }
+  type    = number
+  default = 4
 }
 
 variable "mi_storage_size_in_gb" {
-  description = "SQL Managed Instance 儲存體容量（GB，32 的倍數）。"
-  type        = number
-  default     = 32
-
-  validation {
-    condition     = var.mi_storage_size_in_gb >= 32 && var.mi_storage_size_in_gb % 32 == 0
-    error_message = "mi_storage_size_in_gb 必須至少 32 GB 且為 32 的倍數。"
-  }
+  type    = number
+  default = 32
 }
 
 variable "mi_license_type" {
-  description = "LicenseIncluded，或使用 Azure Hybrid Benefit 的 BasePrice。"
+  type    = string
+  default = "LicenseIncluded"
+}
+
+variable "arc_machine_name" {
+  description = "圖片中 SQL Server 資料庫的父層名稱。"
   type        = string
-  default     = "LicenseIncluded"
+  default     = "CRM-DB"
+}
+
+variable "arc_sql_database_names" {
+  description = "圖片中的五個 Azure Arc SQL Server 資料庫，不得遺漏。"
+  type        = set(string)
+  default     = ["CRMData", "master", "model", "msdb", "tempdb"]
 
   validation {
-    condition     = contains(["LicenseIncluded", "BasePrice"], var.mi_license_type)
-    error_message = "mi_license_type 必須為 LicenseIncluded 或 BasePrice。"
+    condition = (
+      length(var.arc_sql_database_names) == 5 &&
+      alltrue([
+        for required_name in ["CRMData", "master", "model", "msdb", "tempdb"] :
+        contains(var.arc_sql_database_names, required_name)
+      ])
+    )
+    error_message = "arc_sql_database_names 必須正好包含 CRMData、master、model、msdb、tempdb。"
   }
 }
 
-variable "timezone_id" {
-  description = "SQL Managed Instance 時區；建立後不可變更。"
-  type        = string
-  default     = "UTC"
+variable "arc_sql_edition" {
+  type    = string
+  default = "Standard"
 }
 
-variable "crm_database_name" {
-  description = "Terraform 管理的使用者資料庫名稱；依需求固定為 CRMData。"
-  type        = string
-  default     = "CRMData"
+variable "arc_sql_version" {
+  type    = string
+  default = "SQL Server 2022"
+}
 
-  validation {
-    condition     = var.crm_database_name == "CRMData"
-    error_message = "crm_database_name 必須保持為 CRMData。"
-  }
+variable "arc_sql_status" {
+  type    = string
+  default = "Connected"
 }
 
 variable "tags" {
-  description = "套用至支援標籤之資源的標籤。"
+  description = "套用至可加標籤資源的共同標籤。"
   type        = map(string)
   default = {
-    Environment = "prod"
-    Application = "CRM"
+    Environment = "demo"
+    Workload    = "CRM"
     ManagedBy   = "Terraform"
-    DataClass   = "Confidential"
   }
 }
