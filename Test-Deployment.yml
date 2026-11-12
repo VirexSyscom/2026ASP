@@ -142,7 +142,7 @@ stages:
       displayName: 安裝 SQL Server、建立 CRMData、執行 azcmagent connect
       inputs:
         targetType: filePath
-        filePath: '$(terraformWorkingDirectory)/scripts/Install-SqlServerAndOnboardArc.ps1'
+        filePath: '$(terraformWorkingDirectory)/Custom2/Test/scripts/Install-SqlServerAndOnboardArc.ps1'
         pwsh: false
       env:
         ARM_SUBSCRIPTION_ID: '$(SubID1)'
