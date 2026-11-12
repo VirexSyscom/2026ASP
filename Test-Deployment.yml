@@ -1,78 +1,220 @@
-# Azure DevOps Pipeline：CRMData SQL Managed Instance
-# 沿用既有 ReDeployAgentPool、TerraformTask@5 與 Sub1 變數命名。
+# 方案 A：真實 SQL Server + Azure Connected Machine Agent + WindowsAgent.SqlServer
+# 重要：ArcSqlHostAgentPool 必須是「目標 Windows Server 本機」的自架 Azure DevOps Agent Pool。
 trigger:
 - main
 
 pr:
 - main
 
-pool:
-  name: ReDeployAgentPool
-
 variables:
   terraformWorkingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Test'
   terraformPlanFile: '$(System.DefaultWorkingDirectory)/Custom2/Test/crmdata.tfplan'
+  infraAgentPool: 'ReDeployAgentPool'
+  arcSqlAgentPool: 'ArcSqlHostAgentPool'
+  arcResourceGroup: 'Spoke-CRM-RG'
+  arcLocation: 'japaneast'
+  arcMachineName: 'CRM-DB'
+  arcSqlLicenseType: 'LicenseOnly'
+  sql2022SetupPath: 'C:\SQLMedia\SQLServer2022\setup.exe'
+  inventoryWaitSeconds: '3600'
 
-steps:
-- checkout: self
-  clean: true
+stages:
+- stage: TerraformInfrastructure
+  displayName: Terraform 基礎資源
+  jobs:
+  - job: PlanAndApply
+    displayName: 建立 SQL MI 與必要網路
+    pool:
+      name: $(infraAgentPool)
+    steps:
+    - checkout: self
+      clean: true
 
-- task: AzureCLI@2
-  displayName: 註冊必要 Azure Resource Providers
-  inputs:
-    azureSubscription: '$(SVCARM1)'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      set -euo pipefail
-      for namespace in Microsoft.Network Microsoft.Sql Microsoft.HybridCompute Microsoft.AzureArcData; do
-        az provider register --namespace "$namespace" --wait
-      done
+    - task: AzureCLI@2
+      displayName: 註冊必要 Azure Resource Providers
+      inputs:
+        azureSubscription: '$(SVCARM1)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          for namespace in \
+            Microsoft.Network \
+            Microsoft.Sql \
+            Microsoft.HybridCompute \
+            Microsoft.GuestConfiguration \
+            Microsoft.HybridConnectivity \
+            Microsoft.AzureArcData; do
+            az provider register --namespace "$namespace" --wait
+          done
 
+    - task: Bash@3
+      displayName: 清除舊 Plan 並拒絕偽造 Arc inventory
+      inputs:
+        targetType: inline
+        workingDirectory: '$(terraformWorkingDirectory)'
+        script: |
+          set -euo pipefail
+          rm -f crmdata.tfplan crmdata-plan.txt
+          echo "Commit: $(git rev-parse HEAD)"
+          find . -maxdepth 1 -type f \( -name '*.tf' -o -name '*.tfvars' \) -print | sort
+          if grep -RInE 'azapi_resource.*arc_|Microsoft\.AzureArcData/sqlServerInstances/databases|clientPublicKey' . \
+              --include='*.tf' --include='*.tf.json'; then
+            echo '偵測到人工建立的 Arc/Arc SQL inventory；Pipeline 中止。' >&2
+            exit 1
+          fi
 
+    - task: TerraformTask@5
+      displayName: 初始化 Terraform Backend (Sub1)
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(terraformWorkingDirectory)'
+        backendAzureRmUseEntraIdForAuthentication: false
+        backendServiceArm: '$(SVCARM1)'
+        backendAzureRmOverrideSubscriptionID: '$(SubID1)'
+        backendAzureRmResourceGroupName: '$(SARG1)'
+        backendAzureRmStorageAccountName: '$(SAName1)'
+        backendAzureRmContainerName: '$(CName1)'
+        backendAzureRmKey: '$(SAKey1)'
+        commandOptions: '-input=false -lock-timeout=5m'
 
-- task: TerraformTask@5
-  displayName: 初始化 Terraform Backend (Sub1)
-  inputs:
-    provider: 'azurerm'
-    command: 'init'
-    workingDirectory: '$(terraformWorkingDirectory)'
-    backendAzureRmUseEntraIdForAuthentication: false
-    backendServiceArm: '$(SVCARM1)'
-    backendAzureRmOverrideSubscriptionID: '$(SubID1)'
-    backendAzureRmResourceGroupName: '$(SARG1)'
-    backendAzureRmStorageAccountName: '$(SAName1)'
-    backendAzureRmContainerName: '$(CName1)'
-    backendAzureRmKey: '$(SAKey1)'
-    commandOptions: '-input=false -lock-timeout=5m'
+    - task: TerraformTask@5
+      displayName: 驗證 Terraform 組態 (Sub1)
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+        workingDirectory: '$(terraformWorkingDirectory)'
 
-- task: TerraformTask@5
-  displayName: 驗證 Terraform 組態 (Sub1)
-  inputs:
-    provider: 'azurerm'
-    command: 'validate'
-    workingDirectory: '$(terraformWorkingDirectory)'
+    - task: TerraformTask@5
+      displayName: 建立 CRMData 資源計畫 (Sub1)
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(terraformWorkingDirectory)'
+        environmentServiceNameAzureRM: '$(SVCARM1)'
+        environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+        commandOptions: '-input=false -lock-timeout=5m -var-file=terraform.tfvars -out=$(terraformPlanFile)'
+      env:
+        TF_VAR_sql_administrator_password: '$(TF_VAR_sql_administrator_password)'
 
-- task: TerraformTask@5
-  displayName: 建立 CRMData 資源計畫 (Sub1)
-  inputs:
-    provider: 'azurerm'
-    command: 'plan'
-    workingDirectory: '$(terraformWorkingDirectory)'
-    environmentServiceNameAzureRM: '$(SVCARM1)'
-    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
-    commandOptions: '-input=false -lock-timeout=5m -var-file=terraform.tfvars -out=$(terraformPlanFile)'
+    - task: Bash@3
+      displayName: 顯示並稽核 Terraform Plan
+      inputs:
+        targetType: inline
+        workingDirectory: '$(terraformWorkingDirectory)'
+        script: |
+          set -euo pipefail
+          terraform show -no-color crmdata.tfplan > crmdata-plan.txt
+          if grep -nE 'Microsoft\.AzureArcData/sqlServerInstances/databases|azapi_resource.*arc_' crmdata-plan.txt; then
+            echo 'Plan 仍包含人工 Arc inventory；Pipeline 中止。' >&2
+            exit 1
+          fi
+          grep -nE 'azurerm_mssql_managed_(instance|database)' crmdata-plan.txt || true
 
-# Pull Request 只執行 init / validate / plan；只有 main 分支會套用已儲存的 plan。
-- task: TerraformTask@5
-  displayName: 建立 CRMData Azure 資源 (Sub1)
+    - task: TerraformTask@5
+      displayName: 建立 CRMData Azure 資源 (Sub1)
+      condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        workingDirectory: '$(terraformWorkingDirectory)'
+        environmentServiceNameAzureRM: '$(SVCARM1)'
+        environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
+        commandOptions: '-input=false -lock-timeout=5m $(terraformPlanFile)'
+      env:
+        TF_VAR_sql_administrator_password: '$(TF_VAR_sql_administrator_password)'
+
+- stage: ArcSqlOnboarding
+  displayName: 真實 Azure Arc SQL onboarding
+  dependsOn: TerraformInfrastructure
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
-  inputs:
-    provider: 'azurerm'
-    command: 'apply'
-    workingDirectory: '$(terraformWorkingDirectory)'
-    environmentServiceNameAzureRM: '$(SVCARM1)'
-    environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
-    commandOptions: '-input=false -lock-timeout=5m $(terraformPlanFile)'
-  env:
-   TF_VAR_sql_administrator_password: '$(TF_VAR_sql_administrator_password)'
+  jobs:
+  - job: PrepareWindowsSqlHost
+    displayName: 在目標 Windows Server 安裝 SQL 並連接 Azure Arc
+    pool:
+      name: $(arcSqlAgentPool)
+    steps:
+    - checkout: self
+      clean: true
+
+    - task: PowerShell@2
+      displayName: 安裝 SQL Server、建立 CRMData、執行 azcmagent connect
+      inputs:
+        targetType: filePath
+        filePath: '$(terraformWorkingDirectory)/scripts/Install-SqlServerAndOnboardArc.ps1'
+        pwsh: false
+      env:
+        ARM_SUBSCRIPTION_ID: '$(SubID1)'
+        ARC_TENANT_ID: '$(ARC_TENANT_ID)'
+        ARC_RESOURCE_GROUP: '$(arcResourceGroup)'
+        ARC_LOCATION: '$(arcLocation)'
+        ARC_MACHINE_NAME: '$(arcMachineName)'
+        ARC_SP_CLIENT_ID: '$(ARC_SP_CLIENT_ID)'
+        ARC_SP_CLIENT_SECRET: '$(ARC_SP_CLIENT_SECRET)'
+        SQL2022_SETUP_PATH: '$(sql2022SetupPath)'
+        SQL2022_PRODUCT_KEY: '$(SQL2022_PRODUCT_KEY)'
+
+  - job: ConfigureAndValidateArcSql
+    displayName: 安裝 Extension 並驗證五個真實資料庫
+    dependsOn: PrepareWindowsSqlHost
+    pool:
+      name: $(infraAgentPool)
+    steps:
+    - task: AzureCLI@2
+      displayName: 安裝 WindowsAgent.SqlServer 並等待 inventory
+      inputs:
+        azureSubscription: '$(SVCARM1)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+
+          az extension add --name connectedmachine --upgrade --yes --only-show-errors
+          az extension add --name resource-graph --upgrade --yes --only-show-errors
+
+          settings=$(printf '{"SqlManagement":{"IsEnabled":true},"LicenseType":"%s","ExcludedSqlInstances":[]}' '$(arcSqlLicenseType)')
+          az connectedmachine extension create \
+            --machine-name '$(arcMachineName)' \
+            --location '$(arcLocation)' \
+            --name WindowsAgent.SqlServer \
+            --resource-group '$(arcResourceGroup)' \
+            --type WindowsAgent.SqlServer \
+            --publisher Microsoft.AzureData \
+            --settings "$settings" \
+            --enable-auto-upgrade true \
+            --auto-upgrade-minor-version true \
+            --only-show-errors
+
+          deadline=$((SECONDS + $(inventoryWaitSeconds)))
+          while true; do
+            state=$(az connectedmachine extension show \
+              --machine-name '$(arcMachineName)' \
+              --resource-group '$(arcResourceGroup)' \
+              --name WindowsAgent.SqlServer \
+              --query provisioningState -o tsv 2>/dev/null || true)
+            echo "WindowsAgent.SqlServer provisioningState=${state:-NotFound}"
+            [[ "$state" == "Succeeded" ]] && break
+            [[ "$state" == "Failed" ]] && { echo 'WindowsAgent.SqlServer 部署失敗。' >&2; exit 1; }
+            (( SECONDS < deadline )) || { echo '等待 SQL Extension 逾時。' >&2; exit 1; }
+            sleep 20
+          done
+
+          expected=$'CRMData\nmaster\nmodel\nmsdb\ntempdb'
+          while true; do
+            instance_id=$(az graph query -q "resources | where type =~ 'microsoft.azurearcdata/sqlserverinstances' | where resourceGroup =~ '$(arcResourceGroup)' | where tostring(properties.containerResourceId) endswith '/machines/$(arcMachineName)' | project id | take 1" --query 'data[0].id' -o tsv 2>/dev/null || true)
+            if [[ -n "$instance_id" ]]; then
+              actual=$(az rest --method get \
+                --url "https://management.azure.com${instance_id}/databases?api-version=2024-01-01" \
+                --query 'sort(value[].name)' -o tsv 2>/dev/null | sort || true)
+              echo "已探索資料庫：${actual//$'\n'/, }"
+              if [[ "$actual" == "$expected" ]]; then
+                echo 'Azure Arc SQL inventory 已由真實 SQL Server 探索完成。'
+                break
+              fi
+            else
+              echo '等待 Microsoft.AzureArcData/sqlServerInstances 資源...'
+            fi
+            (( SECONDS < deadline )) || { echo '等待五個 Arc SQL database inventory 逾時。' >&2; exit 1; }
+            sleep 30
+          done
