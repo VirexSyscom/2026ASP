@@ -1,6 +1,6 @@
 ############################################
 # variables.tf
-#   Hub-Network-RG 獨立版本
+#   Hub-Network-RG 測試環境獨立版本
 #   與其他資源群組（Spoke / HR / UAT / Migrate）完全無關：
 #     - 不含 Spoke VNet、Peering、Private DNS Zone Link
 #     - 不引用任何其他 RG 的資源
@@ -26,7 +26,7 @@ variable "subscription_id" {
 variable "name_prefix" {
   description = "所有資源名稱的前綴詞，例如 demo、hr、corp。留空則不加前綴（名稱與入口網站現況相同）。資源群組名稱不套用前綴。"
   type        = string
-  default     = "demo"
+  default     = "test"
 
   validation {
     condition     = can(regex("^[a-zA-Z0-9-]*$", var.name_prefix))
@@ -60,15 +60,9 @@ variable "location" {
 ############################################
 
 variable "hub_resource_group_name" {
-  description = "Hub 網路資源群組名稱（VNet / VPN Gateway / Local Gateway / VPN Connection / 公用 IP 皆置於此）"
+  description = "既有 Hub 網路資源群組名稱"
   type        = string
   default     = "Hub-Network-RG"
-}
-
-variable "create_hub_resource_group" {
-  description = "true = 由本組態建立 Hub RG；false = 沿用既有 RG"
-  type        = bool
-  default     = true
 }
 
 ############################################
@@ -78,7 +72,7 @@ variable "create_hub_resource_group" {
 variable "environment" {
   description = "環境代號，會自動寫入 Environment 標籤"
   type        = string
-  default     = "prod"
+  default     = "test"
 
   validation {
     condition     = contains(["prod", "uat", "dev", "test"], var.environment)
@@ -183,11 +177,11 @@ variable "onprem_address_spaces" {
 variable "create_vpn_connection" {
   description = "是否建立 Site-to-Site VPN Connection（ToFortiVPN）"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "vpn_shared_key" {
-  description = "IPsec Pre-Shared Key。只有建立 VPN Connection 時才需要。"
+  description = "IPsec Pre-Shared Key。此測試版本直接由 terraform.tfvars 提供。"
   type        = string
   sensitive   = true
   default     = null
@@ -195,8 +189,8 @@ variable "vpn_shared_key" {
   validation {
     condition = (
       var.create_vpn_connection == false ||
-      (var.vpn_shared_key != null && length(trimspace(var.vpn_shared_key)) > 0)
+      try(length(trimspace(var.vpn_shared_key)) >= 12, false)
     )
-    error_message = "create_vpn_connection 為 true 時，必須提供非空白的 vpn_shared_key。"
+    error_message = "create_vpn_connection 為 true 時，必須提供至少 12 個字元的 vpn_shared_key。"
   }
 }

@@ -1,6 +1,6 @@
 ############################################
 # terraform.tfvars
-#   Hub-Network-RG 獨立版本
+#   Hub-Network-RG 測試環境獨立版本
 ############################################
 
 ############################################
@@ -13,7 +13,7 @@
 # 命名前綴
 #   設為 "" 時，資源名稱與入口網站現況完全相同
 ############################################
-name_prefix    = ""
+name_prefix    = "test"
 name_separator = "-"
 
 ############################################
@@ -24,13 +24,12 @@ location = "japaneast"
 ############################################
 # 資源群組（名稱不套用前綴）
 ############################################
-hub_resource_group_name   = "Hub-Network-RG"
-create_hub_resource_group = true
+hub_resource_group_name = "Hub-Network-RG"
 
 ############################################
 # 標籤
 ############################################
-environment = "prod"
+environment = "test"
 owner       = "network-team"
 cost_center = "CC-1001"
 
@@ -39,7 +38,7 @@ tags = {
   Project      = "Hub-Spoke-Network"
   BusinessUnit = "HR"
   DataClass    = "Confidential"
-  Criticality  = "High"
+  Criticality  = "Low"
   ReviewDate   = "2027-01-01"
 }
 
@@ -68,8 +67,8 @@ onprem_address_spaces = [
   "192.168.20.0/24"
 ]
 
-# create_vpn_connection = true 時，vpn_shared_key 必填
-# 建議以環境變數注入：TF_VAR_vpn_shared_key
+# 測試環境啟用 ToFortiVPN；VPN Shared Key 直接寫入此檔案
+# 注意：此檔案含測試用敏感資訊，不可提交至公開版本庫
 create_vpn_connection = true
-# vpn_shared_key      = "***"
+vpn_shared_key        = "W5ugWgZzirnD5l1vD5ejGUfMWGvxvnsV"
 
