@@ -1,4 +1,4 @@
-# 圖片對齊值：名稱不加前綴、不加亂數後綴。
+# Azure SQL Managed Instance（保留原始需求）
 location                    = "japaneast"
 crm_resource_group_name     = "Spoke-CRM-RG"
 network_resource_group_name = "Spoke-Network-RG"
@@ -9,7 +9,9 @@ managed_database_names = [
   "testCRMData",
 ]
 
-arc_machine_name = "CRM-DB"
+# 真實 Azure Arc SQL Server 的目標值；資源由 Agent/Extension 探索，不由 AzAPI 偽造。
+arc_machine_name      = "CRM-DB"
+arc_sql_license_type  = "LicenseOnly"
 arc_sql_database_names = [
   "CRMData",
   "master",
@@ -18,5 +20,9 @@ arc_sql_database_names = [
   "tempdb",
 ]
 
-# 不要把密碼寫在此檔；請在 Azure DevOps 建立 secret variable：
-# TF_VAR_sql_administrator_password
+# 不要把密碼或 Service Principal secret 寫在此檔。
+# Azure DevOps secret variables：
+# - TF_VAR_sql_administrator_password
+# - ARC_SP_CLIENT_ID
+# - ARC_SP_CLIENT_SECRET
+# - ARC_TENANT_ID

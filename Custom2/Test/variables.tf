@@ -6,13 +6,13 @@ variable "subscription_id" {
 }
 
 variable "location" {
-  description = "Azure 區域。圖片中的位置為 Japan East。"
+  description = "Azure 區域。"
   type        = string
   default     = "japaneast"
 }
 
 variable "crm_resource_group_name" {
-  description = "圖片中的目標資源群組。"
+  description = "SQL MI 與真實 Azure Arc SQL inventory 的目標資源群組。"
   type        = string
   default     = "Spoke-CRM-RG"
 }
@@ -50,7 +50,7 @@ variable "mi_name" {
 }
 
 variable "managed_database_names" {
-  description = "圖片中的兩個受控資料庫，不得遺漏。"
+  description = "SQL Managed Instance 的使用者資料庫。"
   type        = set(string)
   default     = ["CRMData", "testCRMData"]
 
@@ -98,13 +98,24 @@ variable "mi_license_type" {
 }
 
 variable "arc_machine_name" {
-  description = "圖片中 SQL Server 資料庫的父層名稱。"
+  description = "真實 Windows Server 完成 Azure Arc onboarding 後的 Azure 資源名稱。"
   type        = string
   default     = "CRM-DB"
 }
 
+variable "arc_sql_license_type" {
+  description = "WindowsAgent.SqlServer 的授權類型：PAYG、Paid 或 LicenseOnly。"
+  type        = string
+  default     = "LicenseOnly"
+
+  validation {
+    condition     = contains(["PAYG", "Paid", "LicenseOnly"], var.arc_sql_license_type)
+    error_message = "arc_sql_license_type 必須是 PAYG、Paid 或 LicenseOnly。"
+  }
+}
+
 variable "arc_sql_database_names" {
-  description = "圖片中的五個 Azure Arc SQL Server 資料庫，不得遺漏。"
+  description = "Extension inventory 最終應探索到的資料庫；不會由 Terraform 建立 Arc child resources。"
   type        = set(string)
   default     = ["CRMData", "master", "model", "msdb", "tempdb"]
 
@@ -120,23 +131,8 @@ variable "arc_sql_database_names" {
   }
 }
 
-variable "arc_sql_edition" {
-  type    = string
-  default = "Standard"
-}
-
-variable "arc_sql_version" {
-  type    = string
-  default = "SQL Server 2022"
-}
-
-variable "arc_sql_status" {
-  type    = string
-  default = "Connected"
-}
-
 variable "tags" {
-  description = "套用至可加標籤資源的共同標籤。"
+  description = "套用至 Terraform 所管理 Azure 資源的共同標籤。"
   type        = map(string)
   default = {
     Environment = "demo"

@@ -9,22 +9,6 @@ locals {
     var.sql_administrator_password,
     random_password.sql_administrator.result
   )
-
-  arc_sql_database_profiles = {
-    CRMData = { recovery_mode = "Full", size_mb = 1024, space_available_mb = 512 }
-    master  = { recovery_mode = "Simple", size_mb = 8, space_available_mb = 2 }
-    model   = { recovery_mode = "Full", size_mb = 16, space_available_mb = 4 }
-    msdb    = { recovery_mode = "Simple", size_mb = 32, space_available_mb = 8 }
-    tempdb  = { recovery_mode = "Simple", size_mb = 16, space_available_mb = 8 }
-  }
-
-  arc_sql_databases = {
-    for database_name in var.arc_sql_database_names :
-    database_name => local.arc_sql_database_profiles[database_name]
-  }
-
-  # 一次性 RSA-2048 公鑰（Base64 DER）；只用於建立 Portal 可見的 Arc Machine 中繼資料。
-  arc_machine_client_public_key = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwNnb65ThyVlL0s/lKDVULK0h+AITiAiOaD2oCXZund09aBoa016bEUO5FU0F8XeYDdVlkzFhLkxrg2WO+0vtzNXCteW5iff1uZdYTkG8YPyO590naLIxaLsXR4EmRwJmMslBr16s92yrDv/FgytIrgtFsZatV2us0+7iT+jUxcImzSkzAJoBWgq98tIUaXXSo4IW/3XtDZhjttX4p5qIHWQqugxoonFRuEQfTIbYWfXJ8Hq5lgqKhvT3zqJLeVsQFqFQdzKgwBrJ1nBfidtlSduWl8gEk/AAzY42psa1SlaIOl1KtOWWDsfc/d2zQNo+ebQUmE9Wv3CnKJqzPDpudQIDAQAB"
 }
 
 resource "random_password" "sql_administrator" {
@@ -36,8 +20,6 @@ resource "random_password" "sql_administrator" {
   min_numeric      = 2
   min_special      = 2
 }
-
-resource "random_uuid" "arc_machine_vm_id" {}
 
 ############################################
 # 資源群組
@@ -272,77 +254,10 @@ resource "azurerm_mssql_managed_database" "database" {
 }
 
 ############################################
-# 圖片第 3–7 筆：Azure Arc SQL Server 資料庫
+# Azure Arc SQL Server
 ############################################
-resource "azapi_resource" "arc_machine" {
-  type      = "Microsoft.HybridCompute/machines@2024-07-10"
-  name      = var.arc_machine_name
-  location  = azurerm_resource_group.crm.location
-  parent_id = azurerm_resource_group.crm.id
-
-  identity {
-    type = "SystemAssigned"
-  }
-
-  body = {
-    properties = {
-      osType          = "windows"
-      vmId            = random_uuid.arc_machine_vm_id.result
-      clientPublicKey = local.arc_machine_client_public_key
-    }
-  }
-
-  tags = merge(local.common_tags, {
-    ResourceType = "ArcMachine"
-    Purpose      = "SQL-Server-Host"
-  })
-
-  schema_validation_enabled = false
-}
-
-resource "azapi_resource" "arc_sql_instance" {
-  type      = "Microsoft.AzureArcData/sqlServerInstances@2024-01-01"
-  name      = var.arc_machine_name
-  location  = azurerm_resource_group.crm.location
-  parent_id = azurerm_resource_group.crm.id
-
-  body = {
-    properties = {
-      containerResourceId = azapi_resource.arc_machine.id
-      status              = var.arc_sql_status
-      edition             = var.arc_sql_edition
-      version             = var.arc_sql_version
-      instanceName        = var.arc_machine_name
-    }
-  }
-
-  tags = merge(local.common_tags, { ResourceType = "ArcSqlServerInstance" })
-
-  schema_validation_enabled = false
-}
-
-resource "azapi_resource" "arc_sql_database" {
-  for_each = local.arc_sql_databases
-
-  type      = "Microsoft.AzureArcData/sqlServerInstances/databases@2024-01-01"
-  name      = each.key
-  location  = azurerm_resource_group.crm.location
-  parent_id = azapi_resource.arc_sql_instance.id
-
-  body = {
-    properties = {
-      collationName      = "SQL_Latin1_General_CP1_CI_AS"
-      compatibilityLevel = 150
-      state              = "Online"
-      isReadOnly         = false
-      recoveryMode       = each.value.recovery_mode
-      sizeMB             = each.value.size_mb
-      spaceAvailableMB   = each.value.space_available_mb
-    }
-  }
-
-  tags = merge(local.common_tags, { ResourceType = "ArcSqlServerDatabase" })
-
-  schema_validation_enabled = false
-  depends_on                = [azapi_resource.arc_sql_instance]
-}
+# 本版本刻意不建立 Microsoft.HybridCompute/machines、
+# Microsoft.AzureArcData/sqlServerInstances 或 databases。
+# 真實 Windows Server 會由 scripts/Install-SqlServerAndOnboardArc.ps1
+# 安裝 SQL Server、建立 CRMData，並由 Azure Connected Machine Agent
+# 與 WindowsAgent.SqlServer extension 自動探索及建立 Azure Arc inventory。

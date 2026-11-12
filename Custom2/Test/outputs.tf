@@ -5,14 +5,6 @@ output "resource_groups" {
   }
 }
 
-output "portal_database_rows" {
-  description = "在 Spoke-CRM-RG 以『資料庫』篩選時預期看到的 7 筆項目。"
-  value = concat(
-    [for name in sort(tolist(var.managed_database_names)) : "${name} (${azurerm_mssql_managed_instance.crm.name}/${name})"],
-    [for name in sort(tolist(var.arc_sql_database_names)) : "${name} (${azapi_resource.arc_sql_instance.name}/${name})"]
-  )
-}
-
 output "managed_instance" {
   value = {
     name = azurerm_mssql_managed_instance.crm.name
@@ -25,10 +17,14 @@ output "managed_databases" {
   value = { for name, database in azurerm_mssql_managed_database.database : name => database.id }
 }
 
-output "arc_sql_resources" {
+output "arc_sql_onboarding_target" {
+  description = "這是 onboarding 目標，不是假造的 Arc resource ID。實際 ID 由 Agent/Extension 建立。"
   value = {
-    machine_id      = azapi_resource.arc_machine.id
-    instance_id     = azapi_resource.arc_sql_instance.id
-    database_ids    = { for name, database in azapi_resource.arc_sql_database : name => database.id }
+    machine_name              = var.arc_machine_name
+    resource_group           = azurerm_resource_group.crm.name
+    location                 = azurerm_resource_group.crm.location
+    license_type             = var.arc_sql_license_type
+    expected_database_names  = sort(tolist(var.arc_sql_database_names))
+    inventory_owner          = "Azure Connected Machine Agent + WindowsAgent.SqlServer"
   }
 }
