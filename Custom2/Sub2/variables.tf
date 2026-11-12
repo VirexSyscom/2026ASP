@@ -60,7 +60,7 @@ variable "location" {
 ############################################
 
 variable "hub_resource_group_name" {
-  description = "既有 Hub 網路資源群組名稱"
+  description = "由 Terraform 建立並管理的 Hub 網路資源群組名稱"
   type        = string
   default     = "Hub-Network-RG"
 }

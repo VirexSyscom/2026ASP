@@ -2,7 +2,7 @@
 # main.tf
 #   Hub-Network-RG 測試環境獨立版本（不依賴任何其他資源群組）
 #
-#   對應圖片中既有 Hub-Network-RG 的五項測試資源：
+#   建立並管理圖片中的 Hub-Network-RG 與五項測試資源：
 #     Hub-VNET                  虛擬網路
 #     LocalGateway              Local network gateway
 #     ToFortiVPN                Connection
@@ -12,8 +12,8 @@
 #   統一格式：
 #     1. 命名一律經由 local.name 統一表，套用 local.prefix 前綴
 #     2. 標籤一律以 merge(local.hub_tags, { ResourceType = ... }) 產生
-#     3. 僅沿用圖片中的既有 Hub-Network-RG，不建立其他 RG
-#     4. 資源群組名稱不套用前綴，資源標籤一律套用
+#     3. 僅建立並管理圖片中的 Hub-Network-RG，不建立其他 RG
+#     4. 資源群組名稱不套用前綴，但標籤一律套用
 #     5. 不含 Bastion、Spoke VNet、Peering、Private DNS Zone Link、
 #        Log Analytics 工作區與 Entra-Risky-SignIn 警示規則
 ############################################
@@ -50,17 +50,22 @@ locals {
   # Hub 專屬標籤（在共用標籤之上疊加）
   hub_tags = merge(local.common_tags, { Layer = "Network", Tier = "Hub" }, var.hub_tags)
 
-  # ---------- 資源群組解析（僅沿用圖片中的既有 Hub-Network-RG） ----------
-  hub_rg_name     = data.azurerm_resource_group.hub_existing.name
-  hub_rg_location = data.azurerm_resource_group.hub_existing.location
+  # ---------- 資源群組解析（由 Terraform 建立並管理 Hub-Network-RG） ----------
+  hub_rg_name     = azurerm_resource_group.hub.name
+  hub_rg_location = azurerm_resource_group.hub.location
 }
 
 ############################################
-# 資源群組（僅沿用圖片中的既有 Hub-Network-RG）
+# 資源群組（由 Terraform 建立並管理；名稱不套用前綴）
 ############################################
 
-data "azurerm_resource_group" "hub_existing" {
-  name = var.hub_resource_group_name
+resource "azurerm_resource_group" "hub" {
+  name     = var.hub_resource_group_name
+  location = var.location
+
+  tags = merge(local.hub_tags, {
+    ResourceType = "ResourceGroup"
+  })
 }
 
 ############################################
