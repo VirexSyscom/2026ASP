@@ -55,3 +55,47 @@ jobs:
       environmentServiceNameAzureRM: '$(SVCARM1)'
       environmentAzureRmOverrideSubscriptionID: '$(SubID1)'
       commandOptions: '-auto-approve -lock-timeout=10m'
+
+  # =========================
+  # Terraform Init - Sub2
+  # =========================
+  - task: TerraformTask@5
+    displayName: 確認 Azure 環境 (Sub2)
+    retryCountOnTaskFailure: 5
+    inputs:
+      provider: 'azurerm'
+      command: 'init'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub2'
+      backendAzureRmUseEntraIdForAuthentication: false
+      backendServiceArm: '$(SVCARM2)'
+      backendAzureRmOverrideSubscriptionID: '$(SubID2)'
+      backendAzureRmResourceGroupName: '$(SARG2)'
+      backendAzureRmStorageAccountName: '$(SAName2)'
+      backendAzureRmContainerName: '$(CName2)'
+      backendAzureRmKey: '$(SAKey2)'
+
+  # =========================
+  # Terraform Plan - Sub2
+  # =========================
+  - task: TerraformTask@5
+    displayName: 建立資源列表 (Sub2)
+    inputs:
+      provider: 'azurerm'
+      command: 'plan'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub2'
+      environmentServiceNameAzureRM: '$(SVCARM2)'
+      environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
+      commandOptions: '-lock-timeout=10m'
+
+  # =========================
+  # Terraform Apply - Sub2
+  # =========================
+  - task: TerraformTask@5
+    displayName: 建立 Azure 資源 (Sub2)
+    inputs:
+      provider: 'azurerm'
+      command: 'apply'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/Custom2/Sub2'
+      environmentServiceNameAzureRM: '$(SVCARM2)'
+      environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
+      commandOptions: '-auto-approve -lock-timeout=10m'
