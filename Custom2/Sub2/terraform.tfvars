@@ -1,13 +1,4 @@
 ############################################
-# terraform.tfvars
-############################################
-
-############################################
-# 訂閱：通常由 Azure DevOps Service Connection 注入
-############################################
-# subscription_id = "00000000-0000-0000-0000-000000000000"
-
-############################################
 # 命名與區域
 # 留空以保留 Azure Portal 中的原始資源名稱
 ############################################
@@ -64,7 +55,7 @@ bastion_sku     = "Standard"
 # 203.0.113.10 是文件範例位址，部署前必須替換。
 # PSK 建議由 Azure DevOps secret：TF_VAR_vpn_shared_key 注入。
 ############################################
-vpn_gateway_sku        = "VpnGw1"
+vpn_gateway_sku        = "VpnGw1AZ"
 vpn_gateway_generation = "Generation1"
 vpn_active_active      = false
 vpn_enable_bgp         = false
