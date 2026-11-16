@@ -1,17 +1,4 @@
 ############################################
-# main.tf
-#   保留支援 Workload 的 Hub 基礎設施：
-#     - Hub VNet / GatewaySubnet / AzureBastionSubnet
-#     - Local Network Gateway / VPN Gateway / S2S Connection
-#     - Azure Bastion
-#     - Recovery Services Vault
-#     - Azure Service Health Activity Log Alert
-#
-#   已移除：
-#     - skycs / emailservicesky / AzureManagedDomain
-#     - acsemail-2 / azurevm API Connections
-#     - auto_start_vm / auto_stop_vm Logic Apps
-############################################
 
 data "azurerm_client_config" "current" {}
 
