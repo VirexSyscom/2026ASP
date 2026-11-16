@@ -1,8 +1,6 @@
 ############################################
 # providers.tf
-#   保留支援 Workload 的 Hub 網路、連線、Bastion、備份與服務健康警示。
-#   已移除 Communication Services、Email、API Connection 與 Logic Apps，
-#   因此不再需要 azapi provider。
+# Hub 基礎設施所需 Provider
 ############################################
 terraform {
   required_version = ">= 1.9.0"
@@ -12,6 +10,7 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.10"
     }
+
     random = {
       source  = "hashicorp/random"
       version = "~> 3.7"
@@ -21,8 +20,8 @@ terraform {
   backend "azurerm" {}
 }
 
-# subscription_id 留 null 時，採用 Azure DevOps Service Connection
-# 注入的 ARM_SUBSCRIPTION_ID。
+# subscription_id 留為 null 時，AzureRM 會採用 Azure DevOps
+# Service Connection 注入的 ARM_SUBSCRIPTION_ID 環境變數。
 provider "azurerm" {
   features {
     recovery_service {
