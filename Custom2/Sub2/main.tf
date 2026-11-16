@@ -222,7 +222,7 @@ resource "azurerm_virtual_network_gateway" "vpn" {
   type          = "Vpn"
   vpn_type      = "RouteBased"
   active_active = var.vpn_active_active
-  enable_bgp    = var.vpn_enable_bgp
+  bgp_enabled   = var.vpn_enable_bgp
   sku           = var.vpn_gateway_sku
   generation    = var.vpn_gateway_generation
 
