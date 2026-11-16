@@ -19,8 +19,13 @@ data "azurerm_client_config" "current" {}
 # Locals：命名、資源群組與 TAG
 ############################################
 locals {
-  prefix = trimspace(var.name_prefix) == "" ? "" : "${trimspace(var.name_prefix)}${var.name_separator}"
+  # 前綴：留空時不加分隔符號，例如 name_prefix = "demo" -> "demo-"
+  prefix = var.name_prefix == "" ? "" : "${var.name_prefix}${var.name_separator}"
 
+  # 供不允許連字號的資源（儲存體、Compute Gallery、受控執行個體）使用的緊湊前綴
+  prefix_compact = lower(replace(var.name_prefix, "-", ""))
+
+  # ---------- 統一命名表 ----------
   # GatewaySubnet 與 AzureBastionSubnet 是 Azure 保留名稱，不套用前綴。
   name = {
     hub_vnet                = "${local.prefix}Hub-VNET"
