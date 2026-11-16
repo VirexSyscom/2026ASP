@@ -156,7 +156,7 @@ variable "bastion_sku" {
 variable "vpn_gateway_sku" {
   description = "Virtual Network Gateway SKU。"
   type        = string
-  default     = "VpnGw1"
+  default     = "VpnGw1AZ"
 }
 
 variable "vpn_gateway_generation" {
