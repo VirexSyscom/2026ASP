@@ -296,6 +296,7 @@ resource "azurerm_recovery_services_vault" "crm_backup" {
 resource "azurerm_monitor_activity_log_alert" "service_health" {
   name                = local.name.service_health_alert
   resource_group_name = local.mgmt_rg_name
+  location            = "Global"
   scopes              = ["/subscriptions/${data.azurerm_client_config.current.subscription_id}"]
   description         = "Azure 服務健康狀態事件警示；通知 Action Group 可依實際需求另行加入。"
   enabled             = true
