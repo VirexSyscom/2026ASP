@@ -1,121 +1,103 @@
 ############################################
 # outputs.tf
-#   統一格式：共用驗證 → 資源群組 → Hub 網路 → 管理與自動化
 ############################################
 
 ############################################
-# 共用：命名與標籤驗證
+# 共用：命名與 TAG
 ############################################
 output "name_prefix_applied" {
-  description = "實際套用的前綴字串"
+  description = "實際套用的名稱前綴。"
   value       = local.prefix
 }
 
 output "resource_names" {
-  description = "所有資源的最終名稱，可用於驗證前綴是否正確套用"
+  description = "本組態保留資源的最終名稱。"
   value       = local.name
 }
 
 output "common_tags" {
-  description = "套用到所有資源的共用標籤基準"
+  description = "所有資源的共用標籤基準。"
   value       = local.common_tags
 }
 
-output "management_tags_applied" {
-  description = "Hub-Mgmt-RG 資源套用的標籤"
-  value       = local.management_tags
-}
-
-output "network_tags_applied" {
-  description = "Hub-Network-RG 資源套用的標籤"
-  value       = local.network_tags
-}
-
-############################################
-# 資源群組
-############################################
 output "resource_groups" {
-  description = "本組態管理的兩個資源群組"
+  description = "本組態使用的兩個資源群組。"
   value = {
-    management = local.management_rg_name
+    management = local.mgmt_rg_name
     network    = local.network_rg_name
   }
 }
 
 ############################################
-# Hub 網路與 VPN
+# 網路與連線
 ############################################
 output "hub_vnet" {
-  description = "Hub-VNET 與系統子網路"
+  description = "Hub VNet 與保留名稱子網路。"
   value = {
     id                 = azurerm_virtual_network.hub.id
+    name               = azurerm_virtual_network.hub.name
     gateway_subnet_id  = azurerm_subnet.gateway.id
     bastion_subnet_id  = azurerm_subnet.bastion.id
   }
 }
 
-output "public_ip_addresses" {
-  description = "Bastion 與 VPN Gateway 公用 IP"
+output "bastion" {
+  description = "Azure Bastion 與其 Public IP。"
   value = {
-    bastion = azurerm_public_ip.bastion.ip_address
-    vpn     = azurerm_public_ip.vpn_gateway.ip_address
+    id                   = azurerm_bastion_host.hub.id
+    name                 = azurerm_bastion_host.hub.name
+    public_ip_address    = azurerm_public_ip.bastion.ip_address
+    public_ip_address_id = azurerm_public_ip.bastion.id
   }
 }
 
 output "vpn" {
-  description = "Site-to-Site VPN 主要資源 ID"
+  description = "Site-to-Site VPN 資源。"
   value = {
-    virtual_network_gateway_id = azurerm_virtual_network_gateway.vpn.id
-    local_network_gateway_id   = azurerm_local_network_gateway.local.id
-    connection_id              = azurerm_virtual_network_gateway_connection.fortinet.id
+    local_network_gateway_id = azurerm_local_network_gateway.onprem.id
+    vpn_gateway_id           = azurerm_virtual_network_gateway.vpn.id
+    vpn_gateway_public_ip    = azurerm_public_ip.vpn_gateway.ip_address
+    connection_id            = azurerm_virtual_network_gateway_connection.forti.id
   }
 }
 
-############################################
-# 管理、備份與自動化
-############################################
-output "bastion_host_id" {
-  description = "Hub-VNET-Bastion 資源 ID"
-  value       = azurerm_bastion_host.hub.id
-}
-
-output "recovery_services_vault_id" {
-  description = "CRM-Backup 復原服務保存庫資源 ID"
-  value       = azurerm_recovery_services_vault.crm_backup.id
-}
-
-output "communication_services" {
-  description = "Communication Service / Email Communication Service / Azure Managed Domain"
-  value = {
-    communication_service_id = azurerm_communication_service.skycs.id
-    email_service_id         = azurerm_email_communication_service.emailservicesky.id
-    email_domain_id          = azurerm_email_communication_service_domain.azure_managed.id
-  }
-}
-
-output "api_connections" {
-  description = "兩個 API connection 資源 ID"
-  value = {
-    acsemail_2 = azapi_resource.acsemail_2.id
-    azurevm    = azapi_resource.azurevm.id
-  }
-}
-
-output "logic_apps" {
-  description = "VM 自動開關機 Logic App 工作流程"
-  value = {
-    auto_start_vm_id = azurerm_logic_app_workflow.auto_start_vm.id
-    auto_stop_vm_id  = azurerm_logic_app_workflow.auto_stop_vm.id
-  }
-}
-
-output "service_health_alert_id" {
-  description = "Azure 服務健康狀態警示-Hub 資源 ID"
-  value       = azurerm_monitor_activity_log_alert.service_health.id
-}
-
-output "generated_vpn_shared_key" {
-  description = "實際使用的 VPN 預共用金鑰；請以 terraform output -raw generated_vpn_shared_key 安全擷取。"
+output "vpn_shared_key" {
+  description = "實際使用的 VPN PSK；請用 terraform output -raw vpn_shared_key 安全擷取。"
   value       = local.effective_vpn_shared_key
   sensitive   = true
+}
+
+############################################
+# 管理與保護
+############################################
+output "recovery_services_vault" {
+  description = "CRM-Backup Recovery Services Vault。"
+  value = {
+    id   = azurerm_recovery_services_vault.crm_backup.id
+    name = azurerm_recovery_services_vault.crm_backup.name
+  }
+}
+
+output "service_health_alert" {
+  description = "Azure 服務健康狀態 Activity Log Alert。"
+  value = {
+    id   = azurerm_monitor_activity_log_alert.service_health.id
+    name = azurerm_monitor_activity_log_alert.service_health.name
+  }
+}
+
+############################################
+# 移除確認
+############################################
+output "removed_non_workload_resources" {
+  description = "本版已從 Terraform 組態移除的 Communication、API Connection 與 Logic Apps。"
+  value = [
+    "skycs",
+    "emailservicesky",
+    "AzureManagedDomain",
+    "acsemail-2",
+    "azurevm",
+    "auto_start_vm",
+    "auto_stop_vm"
+  ]
 }
