@@ -18,7 +18,7 @@ variable "subscription_id" {
 variable "name_prefix" {
   description = "資源名稱前綴；留空會保留 Azure Portal 畫面中的原始名稱。資源群組與保留名稱子網路不加前綴。"
   type        = string
-  default     = ""
+  default     = "demo"
 
   validation {
     condition     = can(regex("^[a-zA-Z0-9-]*$", var.name_prefix))
