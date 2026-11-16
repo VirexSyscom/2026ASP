@@ -11,7 +11,7 @@
 # 命名與區域
 # 留空以保留 Azure Portal 中的原始資源名稱
 ############################################
-name_prefix    = ""
+name_prefix    = "demo"
 name_separator = "-"
 location       = "japaneast"
 
