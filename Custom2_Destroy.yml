@@ -89,7 +89,7 @@ jobs:
       environmentServiceNameAzureRM: '$(SVCARM2)'
       environmentAzureRmOverrideSubscriptionID: '$(SubID2)'
 
-#- task: PowerShell@2
-#  displayName: 刪除管理群組
-#  inputs:
-#    filePath: '$(Build.SourcesDirectory)/Custom1/Alz-MG/ALZMG-Destroy.ps1'
+  - task: PowerShell@2
+    displayName: 刪除管理群組
+    inputs:
+      filePath: '$(Build.SourcesDirectory)/Custom2/Alz-MG/ALZMG-Destroy.ps1'
