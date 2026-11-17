@@ -1,22 +1,22 @@
 # ==========================================================
 # 移除 ALZ 架構：將 ALZ 底下所有訂閱移回 Tenant Root Group，
-# 再由最底層開始刪除 ALZ / Infra Group / AP Group
+# 再由最底層開始刪除 ALZ 管理群組樹
 # 適用：Azure DevOps AzurePowerShell Task（已自動登入，請勿 Connect-AzAccount）
+#
+# 注意：Management Group 的 GroupName 是 ID，不可包含空白。
+# 建立時建議：GroupName = "APGroup"，DisplayName = "AP Group"
 # ==========================================================
-
 $ErrorActionPreference = "Stop"
 
 # ---------- 參數 ----------
 $ALZMG = "ALZ"     # ALZ 最上層管理群組 ID
 
-# ---------- 方法 1：Tenant Root Group ID = Tenant ID ----------
+# ---------- Tenant Root Group ID = Tenant ID ----------
 Write-Host "取得 Tenant Root Group"
 $TenantRootGroup = (Get-AzContext).Tenant.Id
-
 if (-not $TenantRootGroup) {
     throw "無法從 Get-AzContext 取得 Tenant ID，請確認 Service Connection 登入狀態"
 }
-
 Write-Host "Tenant Root Group = $TenantRootGroup"
 
 # 檢查是否看得到 Root Group（僅警告，不中止）
@@ -29,9 +29,9 @@ if (-not $rootCheck) {
 function Get-AllChildSubscriptions {
     param($Node)
     $result = @()
+
     foreach ($child in $Node.Children) {
         if ($child.Type -like "*subscriptions") {
-            # 訂閱的 Name 即為 Subscription ID
             $result += [pscustomobject]@{
                 Id   = $child.Name
                 Name = $child.DisplayName
@@ -41,6 +41,7 @@ function Get-AllChildSubscriptions {
             $result += Get-AllChildSubscriptions -Node $child
         }
     }
+
     return $result
 }
 
@@ -56,11 +57,13 @@ function Remove-MGTree {
 
     foreach ($child in $mg.Children) {
         if ($child.Type -like "*managementGroups") {
+            # $child.Name 是 Management Group ID，例如 APGroup，
+            # 不使用 DisplayName（例如 AP Group），避免空白造成 GroupName 錯誤。
             Remove-MGTree -GroupName $child.Name
         }
     }
 
-    Write-Host "刪除管理群組：$GroupName"
+    Write-Host "刪除管理群組：$($mg.DisplayName) [$GroupName]"
     Remove-AzManagementGroup -GroupName $GroupName | Out-Null
 }
 
@@ -68,7 +71,6 @@ function Remove-MGTree {
 # 步驟 1：取得 ALZ 底下所有訂閱
 # ==========================================================
 $alz = Get-AzManagementGroup -GroupName $ALZMG -Expand -Recurse -ErrorAction SilentlyContinue
-
 if (-not $alz) {
     Write-Host "找不到管理群組 $ALZMG，無需處理"
     return
@@ -87,14 +89,13 @@ foreach ($sub in $subs) {
         -SubscriptionId $sub.Id | Out-Null
 }
 
-# 等待 Azure 同步
 if ($subs.Count -gt 0) {
     Write-Host "等待 Azure 同步 (20 秒)..."
     Start-Sleep -Seconds 20
 }
 
 # ==========================================================
-# 步驟 3：刪除 ALZ 管理群組樹（AP Group → Infra Group → ALZ）
+# 步驟 3：刪除 ALZ 管理群組樹
 # ==========================================================
 $maxRetry = 3
 for ($i = 1; $i -le $maxRetry; $i++) {
@@ -117,6 +118,6 @@ Get-AzManagementGroup | Select-Object Name, DisplayName | Format-Table
 
 Write-Host "`nTenant Root Group 下的子項目："
 (Get-AzManagementGroup -GroupName $TenantRootGroup -Expand -ErrorAction SilentlyContinue).Children |
-    Select-Object DisplayName, Type | Format-Table
+    Select-Object Name, DisplayName, Type | Format-Table
 
 Write-Host "ALZ 架構移除完成"
