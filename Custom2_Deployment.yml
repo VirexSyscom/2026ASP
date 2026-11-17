@@ -10,7 +10,12 @@ jobs:
   timeoutInMinutes: 0
   cancelTimeoutInMinutes: 5
 
+
   steps:
+  - task: PowerShell@2
+    displayName: 設定管理群組
+    inputs:
+      filePath: '$(Build.SourcesDirectory)/Custom2/Alz-MG/ALZMG-Deploy.ps1'
 
   # =========================
   # Terraform Init - Sub1
