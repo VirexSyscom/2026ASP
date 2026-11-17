@@ -15,10 +15,10 @@ jobs:
   timeoutInMinutes: 0          # 0 = 不限時間（僅自架 agent 有效）
   cancelTimeoutInMinutes: 5    # 手動取消時，等待 task 收尾的分鐘數
   steps:
-#- task: PowerShell@2
-#  displayName: 移除角色 & 刪除帳號
-#  inputs:
-#    filePath: '$(Build.SourcesDirectory)/Custom1/Acc-Role/Remove-EntraUsers-RBAC.ps1'
+  - task: PowerShell@2
+    displayName: 移除角色 & 刪除帳號
+    inputs:
+      filePath: '$(Build.SourcesDirectory)/Custom2/Acc-Role/Remove-EntraUsers-RBAC.ps1'
 
   - task: TerraformTask@5
     displayName: 確認 Azure 環境 (Sub1)
